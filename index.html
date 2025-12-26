@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Freedote</title>
+    <script src="https://cdn.staticfile.org/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary-color: #2563eb; --bg-color: #f8fafc; --header-height: 50px;}
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; color: #333;}
+
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f5f9; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: white; padding: 35px 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; }
+        .login-box h2 { margin-top: 0; color: #1e293b; font-size: 1.5rem; margin-bottom: 5px;}
+        .login-sub { color: #64748b; font-size: 0.9rem; margin-bottom: 25px; }
+
+        .mode-switch { display: flex; background: #e2e8f0; padding: 4px; border-radius: 8px; margin-bottom: 20px; }
+        .mode-btn { flex: 1; padding: 8px; border: none; background: transparent; cursor: pointer; border-radius: 6px; font-size: 0.9rem; color: #64748b; font-weight: 500;}
+        .mode-btn.active { background: white; color: var(--primary-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: bold;}
+
+        .input-group { text-align: left; margin-bottom: 15px; }
+        .login-box input { width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: border 0.2s; outline: none; background: #f8fafc;}
+        .login-box input:focus { border-color: var(--primary-color); background: white; }
+
+        .main-btn { width: 100%; padding: 14px; background: var(--primary-color); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; transition: transform 0.1s;}
+        .main-btn:active { transform: scale(0.98); }
+        .main-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        .local-btn { background: #059669; } /* 绿色按钮 */
+
+        .msg { color: #ef4444; font-size: 0.85rem; margin-top: 15px; min-height: 20px;}
+
+        /* 主界面样式 */
+        .app-container { display: flex; flex-direction: column; height: 100%; filter: blur(0); transition: filter 0.3s;}
+        .app-container.blur { filter: blur(5px); }
+        .header { background: #fff; padding: 0 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; height: var(--header-height); flex-shrink: 0; z-index: 20;}
+        .header h1 { margin: 0; font-size: 1rem; color: #1e293b; font-weight: 700; display:flex; align-items:center; gap:5px;}
+        .user-info { font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 8px; }
+        .logout-link { color: #ef4444; cursor: pointer; }
+
+        .config-panel { position: absolute; top: 50px; right: 10px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; z-index: 100; display: none; width: 260px;}
+        .config-panel.show { display: block; }
+        .config-panel input { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px;}
+
+        .tab-bar { background: #e2e8f0; display: flex; align-items: flex-end; padding-left: 10px; gap: 4px; height: 40px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid #cbd5e1; scrollbar-width: none;}
+        .tab { padding: 10px 15px; background: #cbd5e1; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.85rem; color: #475569; white-space: nowrap; }
+        .tab.active { background: white; color: var(--primary-color); font-weight: bold; padding-top: 12px; margin-top: -2px; box-shadow: 0 -2px 4px rgba(0,0,0,0.05); }
+        .tab-close { margin-left: 5px; opacity: 0.6; font-size: 0.7rem; }
+        .add-tab-btn { padding: 10px 15px; font-weight: bold; color: #64748b; cursor: pointer; }
+
+        .main-body { display: flex; flex: 1; overflow: hidden; position: relative; transition: all 0.3s; background: white;}
+        .left-panel { width: 300px; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 15px; z-index: 10; background: #fff; }
+        .nav-panel { width: 220px; background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;}
+        .nav-item { padding: 10px 15px; cursor: pointer; color: #334155; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9;}
+        .nav-item:hover { background: #e2e8f0; }
+        .content-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0; position: relative;}
+        .markdown-scroll { flex: 1; overflow-y: auto; padding: 40px; }
+        .markdown-body { max-width: 800px; margin: 0 auto; line-height: 1.7; color: #333; }
+        .markdown-body blockquote { border-left: 4px solid var(--primary-color); margin: 10px 0; padding: 5px 15px; background: #f8fafc; color: #555; }
+
+        .view-toggle-btn { position: absolute; top: 15px; right: 20px; z-index: 50; background: white; border: 1px solid #cbd5e1; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; display: flex; gap:5px; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+        .editor-container { display: none; padding-bottom: 50px; }
+        .editor-container.active { display: block; }
+        .edit-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+        .edit-label { font-size: 0.8rem; color: #64748b; font-weight: bold; margin-bottom: 5px; display: block;}
+        .edit-textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-family: inherit; font-size: 14px; margin-bottom: 10px; resize: vertical;}
+        .edit-item-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+        .edit-input { flex: 1; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px; font-size: 14px; }
+        .del-btn { color: #ef4444; cursor: pointer; padding: 8px; font-size: 1.1rem; line-height: 1; }
+        .add-item-btn { background: none; border: 1px dashed #cbd5e1; color: var(--primary-color); width: 100%; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-top: 5px;}
+        .save-float-btn { position: fixed; bottom: 30px; right: 30px; background: #059669; color: white; padding: 12px 25px; border-radius: 30px; border: none; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; font-size: 1rem; z-index: 100; display: none;}
+        .editor-container.active ~ .save-float-btn { display: block; }
+
+        textarea#userInput { width: 100%; height: 120px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; resize: none; margin-bottom: 10px; font-family: inherit; font-size: 14px;}
+        textarea#userInput:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
+        button.action-btn { border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; color: white; width: 100%; margin-bottom: 8px; font-size: 14px; background: var(--primary-color);}
+        button.action-btn:disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.7;}
+        .btn-outline { background: white; border: 1px solid #cbd5e1; color: #475569; width: 100%; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 5px;}
+        .status-box { margin-bottom: 5px; min-height: 20px; font-size: 0.8rem; color: var(--primary-color); font-weight: bold; }
+        .options-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; color: #475569; }
+        .backup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 5px; }
+
+        @media (max-width: 768px) {
+            .main-body { flex-direction: column; }
+            .left-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #e2e8f0; order: 1; padding: 10px;}
+            .left-panel.collapsed textarea#userInput, .left-panel.collapsed .btn-group, .left-panel.collapsed .options-row { display: none; }
+            .mobile-toggle { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #64748b; margin-bottom: 5px; font-size: 0.9rem;}
+            .nav-panel { width: 100%; height: 50px; flex-direction: row; border-right: none; border-bottom: 1px solid #e2e8f0; overflow-x: auto; overflow-y: hidden; order: 2; align-items: center; padding: 0 10px; white-space: nowrap;}
+            .nav-item { border-bottom: none; border-radius: 15px; background: #f1f5f9; margin-right: 8px; padding: 5px 12px; font-size: 0.8rem;}
+            .nav-item.active { background: var(--primary-color); color: white; }
+            .content-panel { order: 3; height: 100%; }
+            .markdown-scroll { padding: 15px; } 
+            .save-float-btn { bottom: 20px; right: 20px; padding: 10px 20px; font-size: 0.9rem;}
+        }
+        @media (min-width: 769px) { .mobile-toggle { display: none; } }
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay">
+    <div class="login-box">
+        <h2>🚀 Freedote 知识库</h2>
+        <div class="mode-switch">
+            <button class="mode-btn active" id="tabLocal" onclick="switchLoginMode('local')">🏠 离线使用</button>
+            <button class="mode-btn" id="tabCloud" onclick="switchLoginMode('cloud')">☁️ 云端同步</button>
+        </div>
+
+        <div id="localForm">
+            <div class="login-sub">数据保存在本地，无需联网。<br>AI 功能需填入 Key 即可使用。</div>
+            <button class="main-btn local-btn" onclick="enterLocalMode()">🚀 立即进入</button>
+        </div>
+
+        <div id="cloudForm" style="display:none;">
+            <div class="login-sub">需要账号密码登录。</div>
+            <div class="input-group">
+                <input type="text" id="email" placeholder="邮箱">
+            </div>
+            <div class="input-group">
+                <input type="password" id="password" placeholder="密码">
+            </div>
+            <button class="main-btn" id="loginBtn" onclick="handleLogin()">登录 / 注册</button>
+        </div>
+
+        <div class="msg" id="loginMsg"></div>
+    </div>
+</div>
+
+<div class="app-container blur" id="appContainer">
+    <div class="header">
+        <h1>📑 知识库 <span id="modeTag" style="font-size:0.7em; background:#eee; padding:2px 6px; border-radius:4px;">离线版</span></h1>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div class="user-info"><span id="userEmail"></span><span class="logout-link" onclick="handleLogout()">退出</span></div>
+            <button class="config-btn" onclick="toggleConfig()">⚙️</button>
+        </div>
+        <div class="config-panel" id="configPanel">
+            <h4>设置</h4>
+            <input type="password" id="apiKey" placeholder="DeepSeek API Key (sk-...)" onchange="saveSettings()">
+            <input type="text" id="modelName" placeholder="deepseek-chat" value="deepseek-chat" onchange="saveSettings()">
+            <div id="syncOption" style="display:none">
+                <label style="font-size:0.85rem; display:block; margin-top:5px; color:#666;">
+                    <input type="checkbox" id="syncKey" onchange="saveSettings()"> ☁️ 同步 Key 到云端
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-bar" id="tabBar"></div>
+
+    <div class="main-body">
+        <div class="left-panel" id="inputPanel">
+            <div class="mobile-toggle" onclick="document.getElementById('inputPanel').classList.toggle('collapsed')">
+                <span>⚡ 录入 / 指令</span><span>▼</span>
+            </div>
+            <div class="options-row">
+                <label style="cursor:pointer; display:flex; align-items:center;">
+                    <input type="checkbox" id="autoOrganize" checked style="margin-right:5px;"> ✨ AI 润色与整理
+                </label>
+            </div>
+            <textarea id="userInput" placeholder="输入内容... (支持 @分类 指令)"></textarea>
+            <div id="status" class="status-box"></div>
+            <div class="btn-group">
+                <button class="action-btn" onclick="processInput()">🚀 执行 (Auto)</button>
+                <div class="backup-grid">
+                    <button class="btn-outline" onclick="exportMarkdown()">📄 导出 MD</button>
+                    <button class="btn-outline" onclick="exportJSON()">⚙️ 导出 Data</button>
+                </div>
+                <button class="btn-outline" onclick="document.getElementById('fileInput').click()">📥 导入备份 (JSON)</button>
+                <input type="file" id="fileInput" style="display:none" onchange="importJSON(this)" accept=".json">
+                <button class="btn-outline" style="color:#ef4444; margin-top:5px;" onclick="clearCurrentTab()">🗑️ 清空</button>
+            </div>
+        </div>
+        <div class="nav-panel" id="navList"></div>
+        <div class="content-panel">
+            <button class="view-toggle-btn" onclick="toggleEditMode()">
+                <span id="viewIcon">✏️</span> <span id="viewText">编辑模式</span>
+            </button>
+            <div class="markdown-scroll">
+                <div id="markdownOutput" class="markdown-body"></div>
+                <div id="editorOutput" class="editor-container"></div>
+                <button class="save-float-btn" onclick="saveEditor()">💾 保存修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // === 📖 预设说明书 (新用户默认显示) ===
+    const DEFAULT_NOTE_DATA = {
+      "tabs": [
+        { "id": "tab_guide", "name": "📘 使用手册" },
+        { "id": "tab_demo", "name": "🧪 实验记录(示例)" }
+      ],
+      "content_map": {
+        "tab_guide": {
+          "快速入门": {
+            "summary": "欢迎使用 Freedote！这是一个懂你的 AI 知识库。",
+            "sections": [
+              { "title": "如何记录？", "items": ["直接在左侧输入内容。", "例如：今天读了一篇关于 CRISPR 的文献，重点是..."] },
+              { "title": "魔法指令 (@)", "items": ["输入 @待办 买牛奶 -> 自动归类到[待办]", "输入 @灵感 突然想到的好点子 -> 自动归类到[灵感]"] },
+              { "title": "AI 整理", "items": ["勾选“AI 润色”，我会帮你提取摘要和排版。", "取消勾选，则为“速记模式”，速度更快。"] }
+            ]
+          },
+          "数据安全": {
+            "summary": "你的数据完全由你掌控。",
+            "sections": [
+              { "title": "存储位置", "items": ["离线模式：数据在你的浏览器缓存里。", "云端模式：数据在你的 Supabase 数据库里。"] },
+              { "title": "注意事项", "items": ["请定期点击左侧“导出 Data”进行备份。", "不要在公共电脑上留下你的 Key。"] }
+            ]
+          }
+        },
+        "tab_demo": {
+          "枯草芽孢杆菌": {
+            "summary": "关于 B. subtilis 的实验记录示例",
+            "sections": [
+              { "title": "实验数据", "items": ["OD600 = 0.8", "发酵时间：24h"] },
+              { "title": "异常分析", "items": ["产率偏低，可能是溶氧不足导致。"] }
+            ]
+          }
+        }
+      },
+      "settings": {}
+    };
+
+    // ============================================
+    // ⚠️ Supabase 配置 (请在此处填入你的 Key)
+    const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; 
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; 
+    // ============================================
+
+    let sbClient = null;
+    try {
+        if(window.supabase && SUPABASE_URL.includes('http')) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch(e) { console.log("Supabase 未初始化"); }
+
+    let isLocalMode = false;
+    let currentUser = null;
+    let noteData = { tabs: [], content_map: {}, settings: {} }; 
+    let currentTabId = 'tab_guide';
+    let isEditMode = false;
+
+    // === 初始化 ===
+    window.onload = async function() {
+        if(window.innerWidth < 768) document.getElementById('inputPanel').classList.add('collapsed');
+
+        if(localStorage.getItem('apiKey')) document.getElementById('apiKey').value = localStorage.getItem('apiKey');
+
+        if(sbClient) {
+            const { data: { session } } = await sbClient.auth.getSession();
+            if (session) {
+                switchLoginMode('cloud');
+                loginSuccess(session.user, false);
+                return;
+            }
+        }
+
+        if(localStorage.getItem('is_local_mode') === 'true') {
+            switchLoginMode('local');
+            enterLocalMode();
+        }
+    }
+
+    function switchLoginMode(mode) {
+        document.getElementById('tabLocal').className = mode==='local' ? 'mode-btn active' : 'mode-btn';
+        document.getElementById('tabCloud').className = mode==='cloud' ? 'mode-btn active' : 'mode-btn';
+        document.getElementById('localForm').style.display = mode==='local' ? 'block' : 'none';
+        document.getElementById('cloudForm').style.display = mode==='cloud' ? 'block' : 'none';
+    }
+
+    function enterLocalMode() {
+        isLocalMode = true;
+        currentUser = { id: 'local_user', email: 'Local@User' };
+        localStorage.setItem('is_local_mode', 'true');
+        document.getElementById('userEmail').innerText = "🏠 本地模式";
+        document.getElementById('modeTag').innerText = "离线版";
+        document.getElementById('syncOption').style.display = 'none';
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').classList.remove('blur');
+        loadData();
+    }
+
+    async function handleLogin() {
+        if(!sbClient) return alert("请先在代码中填入 Supabase URL 和 Key");
+        const btn = document.getElementById('loginBtn');
+        const msg = document.getElementById('loginMsg');
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        if(!email || !password) return msg.innerText = "请输入账号密码";
+        try {
+            btn.disabled = true; msg.innerText = "连接中...";
+            let { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+            if (error) {
+                msg.innerText = "尝试注册...";
+                const res = await sbClient.auth.signUp({ email, password });
+                if (res.error) msg.innerText = res.error.message;
+                else {
+                    const loginRes = await sbClient.auth.signInWithPassword({ email, password });
+                    if(!loginRes.error) loginSuccess(loginRes.data.user, true);
+                }
+            } else {
+                loginSuccess(data.user, true);
+            }
+        } catch(e) { msg.innerText = "错误: " + e.message; } finally { btn.disabled = false; }
+    }
+
+    async function loginSuccess(user, isCloud) {
+        isLocalMode = false;
+        currentUser = user;
+        localStorage.removeItem('is_local_mode');
+        document.getElementById('userEmail').innerText = `☁️ ${user.email.split('@')[0]}`;
+        document.getElementById('modeTag').innerText = "云端版";
+        document.getElementById('syncOption').style.display = 'block';
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').classList.remove('blur');
+        await loadData();
+    }
+
+    async function handleLogout() {
+        if(!confirm("确定退出？")) return;
+        localStorage.removeItem('is_local_mode');
+        if(!isLocalMode && sbClient) await sbClient.auth.signOut();
+        location.reload();
+    }
+
+    // === 数据存取 (已集成说明书逻辑) ===
+    async function loadData() {
+        document.getElementById('status').innerText = "🔄";
+
+        if (isLocalMode) {
+            const localRaw = localStorage.getItem('freedote_data');
+            if (localRaw) {
+                noteData = JSON.parse(localRaw);
+            } else {
+                // 加载说明书
+                noteData = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
+            }
+        } else {
+            const { data } = await sbClient.from('notes').select('content').eq('user_id', currentUser.id).single();
+            if (data && data.content) {
+                noteData = data.content;
+                if(noteData.settings?.apiKey) {
+                    document.getElementById('apiKey').value = noteData.settings.apiKey;
+                    localStorage.setItem('apiKey', noteData.settings.apiKey);
+                }
+            } else {
+                // 加载说明书
+                noteData = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
+            }
+        }
+
+        if(!noteData.tabs || noteData.tabs.length===0) noteData.tabs = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA)).tabs;
+        if(!noteData.tabs.find(t=>t.id===currentTabId)) currentTabId = noteData.tabs[0].id;
+
+        renderUI();
+        document.getElementById('status').innerText = "";
+    }
+
+    async function saveData() {
+        if (!currentUser) return;
+        if(!noteData.settings) noteData.settings = {};
+        if(!isLocalMode && document.getElementById('syncKey').checked) {
+             noteData.settings.apiKey = document.getElementById('apiKey').value;
+        }
+        if (isLocalMode) {
+            localStorage.setItem('freedote_data', JSON.stringify(noteData));
+        } else {
+            const { data } = await sbClient.from('notes').select('id').eq('user_id', currentUser.id).single();
+            if (data) await sbClient.from('notes').update({ content: noteData, updated_at: new Date() }).eq('user_id', currentUser.id);
+            else await sbClient.from('notes').insert({ user_id: currentUser.id, content: noteData });
+        }
+    }
+
+    function saveSettings() {
+        localStorage.setItem('apiKey', document.getElementById('apiKey').value);
+        localStorage.setItem('modelName', document.getElementById('modelName').value);
+        saveData();
+    }
+    function toggleConfig() { document.getElementById('configPanel').classList.toggle('show'); }
+
+    // === UI ===
+    function renderUI() {
+        const tabContainer = document.getElementById('tabBar');
+        tabContainer.innerHTML = '';
+        (noteData.tabs || []).forEach(tab => {
+            const div = document.createElement('div');
+            div.className = `tab ${tab.id === currentTabId ? 'active' : ''}`;
+            div.innerHTML = `<span onclick="switchTab('${tab.id}')" ondblclick="renameTab('${tab.id}')">${tab.name}</span><span class="tab-close" onclick="deleteTab('${tab.id}', event)">✕</span>`;
+            tabContainer.appendChild(div);
+        });
+        const add = document.createElement('div');
+        add.className = 'add-tab-btn'; add.innerText = '+'; add.onclick = addNewTab;
+        tabContainer.appendChild(add);
+        if(isEditMode) renderEditor(); else renderContent();
+    }
+    function switchTab(id) { currentTabId = id; isEditMode = false; updateViewModeUI(); renderUI(); }
+    function addNewTab() { const n = prompt("新分类:"); if(n) { noteData.tabs.push({id:'tab_'+Date.now(), name:n}); switchTab(noteData.tabs[noteData.tabs.length-1].id); saveData(); } }
+    function deleteTab(id, e) { e.stopPropagation(); if(noteData.tabs.length<=1)return alert("保留一个"); if(confirm("删除?")) { noteData.tabs=noteData.tabs.filter(t=>t.id!==id); delete noteData.content_map[id]; switchTab(noteData.tabs[0].id); saveData(); } }
+    function renameTab(id) { const t=noteData.tabs.find(x=>x.id===id); const n=prompt("重命名:",t.name); if(n){ t.name=n; renderUI(); saveData(); } }
+
+    function toggleEditMode() { isEditMode = !isEditMode; updateViewModeUI(); if(isEditMode) renderEditor(); else renderContent(); }
+    function updateViewModeUI() {
+        const btnText = document.getElementById('viewText'), btnIcon = document.getElementById('viewIcon');
+        const mdDiv = document.getElementById('markdownOutput'), edDiv = document.getElementById('editorOutput');
+        if(isEditMode) { btnText.innerText="退出编辑"; btnIcon.innerText="❌"; mdDiv.style.display='none'; edDiv.classList.add('active'); }
+        else { btnText.innerText="编辑模式"; btnIcon.innerText="✏️"; mdDiv.style.display='block'; edDiv.classList.remove('active'); }
+    }
+
+    function renderContent() {
+        const topics = noteData.content_map[currentTabId] || {};
+        const navDiv = document.getElementById('navList'), contentDiv = document.getElementById('markdownOutput');
+        let md = "", navHtml = "";
+        if(Object.keys(topics).length === 0) { contentDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">暂无内容</div>'; navDiv.innerHTML = ''; return; }
+        for(const [name, data] of Object.entries(topics)) {
+            navHtml += `<div class="nav-item" onclick="document.getElementById('t-${name}').scrollIntoView({behavior:'smooth'})">${name}</div>`;
+            md += `<h1 id="t-${name}">${name}</h1>\n\n`;
+            if(data.summary) md += `> ${data.summary}\n\n`;
+            if(data.sections && Array.isArray(data.sections)) {
+                data.sections.forEach(s => { md += `### ${s.title}\n`; if(s.items) s.items.forEach(i => md += `- ${i}\n`); md += `\n`; });
+            }
+            md += `---\n\n`;
+        }
+        navDiv.innerHTML = navHtml; contentDiv.innerHTML = marked.parse(md);
+    }
+
+    function renderEditor() {
+        const topics = noteData.content_map[currentTabId] || {};
+        const editorDiv = document.getElementById('editorOutput');
+        let html = "";
+        if(Object.keys(topics).length === 0) { editorDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">空</div>'; return; }
+        for(const [name, data] of Object.entries(topics)) {
+            html += `<div class="edit-block" data-topic="${name}"><h2 style="margin-top:0;border-bottom:1px solid #eee;">${name}</h2><label class="edit-label">摘要</label><textarea class="edit-textarea summary-input">${data.summary||''}</textarea><label class="edit-label">详情</label><div>`;
+            if(data.sections) {
+                data.sections.forEach(sec => {
+                    html += `<div class="section-block" style="margin-bottom:10px;"><input type="text" class="edit-input section-title-input" value="${sec.title}" style="font-weight:bold;margin-bottom:5px;"><div>`;
+                    if(sec.items) sec.items.forEach(item => html += `<div class="edit-item-row"><input type="text" class="edit-input item-input" value="${item}"><span class="del-btn" onclick="this.parentElement.remove()">🗑️</span></div>`);
+                    html += `</div><button class="add-item-btn" onclick="addEmptyItem(this)">+ 添加</button></div>`;
+                });
+            }
+            html += `</div></div>`;
+        }
+        editorDiv.innerHTML = html;
+    }
+    window.addEmptyItem = function(btn) { btn.previousElementSibling.insertAdjacentHTML('beforeend', `<div class="edit-item-row"><input type="text" class="edit-input item-input" placeholder="..."><span class="del-btn" onclick="this.parentElement.remove()">🗑️</span></div>`); }
+    window.saveEditor = async function() {
+        const topics = {};
+        document.querySelectorAll('.edit-block').forEach(block => {
+            const sections = [];
+            block.querySelectorAll('.section-block').forEach(sb => {
+                const items = []; sb.querySelectorAll('.item-input').forEach(i => { if(i.value.trim()) items.push(i.value.trim()); });
+                sections.push({title: sb.querySelector('.section-title-input').value, items});
+            });
+            topics[block.getAttribute('data-topic')] = { summary: block.querySelector('.summary-input').value, sections };
+        });
+        noteData.content_map[currentTabId] = topics; await saveData(); toggleEditMode(); alert("已保存");
+    }
+
+    // === Tools ===
+    function exportMarkdown() {
+        const topics = noteData.content_map[currentTabId] || {}; const name = noteData.tabs.find(t=>t.id===currentTabId).name;
+        let md = `# ${name}\n\n`; for(const [k,v] of Object.entries(topics)) { md+=`# ${k}\n\n`; if(v.summary)md+=`> ${v.summary}\n\n`; if(v.sections) v.sections.forEach(s=>{ md+=`### ${s.title}\n`; if(s.items) s.items.forEach(i=>md+=`- ${i}\n`); }); md+=`---\n`; }
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md],{type:'text/markdown'})); a.download = `${name}_备份.md`; a.click();
+    }
+    function exportJSON() {
+        const jsonStr = JSON.stringify(noteData, null, 2);
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([jsonStr],{type:'application/json'})); a.download = `Full_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    }
+    function importJSON(input) {
+        const file = input.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                if(!parsed.tabs || !parsed.content_map) throw new Error("格式错误");
+                if(confirm("导入将覆盖数据，确定？")) { noteData = parsed; if(!noteData.tabs.find(t=>t.id===currentTabId)) currentTabId = noteData.tabs[0].id; await saveData(); renderUI(); alert("导入成功"); }
+            } catch(err) { alert("导入失败: "+err.message); }
+            input.value = '';
+        }; reader.readAsText(file);
+    }
+    function clearCurrentTab() { if(confirm("清空?")) { noteData.content_map[currentTabId]={}; renderContent(); saveData(); } }
+
+    // === AI Logic ===
+    const TOOLS = {
+        create_tab: (args) => { const newId='tab_'+Date.now(); noteData.tabs.push({id:newId, name:args[0]}); return "已创建"; },
+        rename_tab: (args) => { const tab=noteData.tabs.find(t=>t.id===currentTabId); if(tab) tab.name=args[0]; return "已重命名"; },
+        delete_tab: (args) => { if(noteData.tabs.length<=1)return "最少保留一个"; noteData.tabs=noteData.tabs.filter(t=>t.id!==currentTabId); delete noteData.content_map[currentTabId]; switchTab(noteData.tabs[0].id); return "已删除"; },
+        delete_topic: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]) { delete t[args[0]]; return "已删除主题"; } return "未找到"; },
+        rename_topic: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]) { t[args[1]]=t[args[0]]; delete t[args[0]]; return "已重命名"; } return "未找到"; },
+        delete_section: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t&&t.sections) { t.sections=t.sections.filter(s=>!s.title.includes(args[1])); return "已删小节"; } return "未找到"; },
+        add_to_topic: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t) { if(!t.sections)t.sections=[]; let l=t.sections[t.sections.length-1]; if(l)l.items.push(args[1]); else t.sections.push({title:"新增",items:[args[1]]}); return "已追加"; } return "未找到"; },
+        clear_topic: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t){t.summary="";t.sections=[];return "已清空";} return "未找到"; },
+        move_topic: (args) => { const t=noteData.tabs.find(x=>x.name===args[1]); if(!t)return "目标不存在"; const src=noteData.content_map[currentTabId]; if(src&&src[args[0]]) { if(!noteData.content_map[t.id]) noteData.content_map[t.id]={}; noteData.content_map[t.id][args[0]]=src[args[0]]; delete src[args[0]]; return "已移动"; } return "主题不存在"; },
+        merge_topics: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]&&t[args[1]]) { t[args[1]].summary += " "+t[args[0]].summary; t[args[1]].sections.push(...(t[args[0]].sections||[])); delete t[args[0]]; return "已合并"; } return "主题不存在"; }
+    };
+
+    async function processInput() {
+        let input = document.getElementById('userInput').value.trim();
+        if(!input) return;
+        const autoOrganize = document.getElementById('autoOrganize').checked;
+        const btn = document.querySelector('.action-btn');
+        const status = document.getElementById('status');
+        document.getElementById('userInput').value = ''; 
+        try {
+            btn.disabled = true; status.innerText = "🧠...";
+            const currentTopics = noteData.content_map[currentTabId] || {};
+            const topicList = Object.keys(currentTopics);
+            const currentTabName = noteData.tabs.find(t=>t.id===currentTabId).name;
+            const allTabNames = noteData.tabs.map(t=>t.name);
+
+            let routerPrompt = "";
+            if (!autoOrganize) {
+                 routerPrompt = `
+你是一个专业的档案管理员。
+当前标签页: "${currentTabName}"
+已存在的主题列表: ${JSON.stringify(topicList)}
+用户输入: "${input}"
+
+请执行以下逻辑并返回 JSON：
+1. 【优先归类】：判断用户输入是否属于“已存在的主题列表”中的某一项？如果是，直接复用该名称。
+2. 【智能新建】：如果不属于任何现有主题，请根据内容提炼一个精简的分类名称（2-6个字，例如"待办"、"Python"、"会议"）。
+3. 【禁止偷懒】：严禁返回"未分类"、"默认"、"其他"等无意义名称。必须根据内容概括。
+
+返回格式: {"type":"raw", "topic":"你的决策结果"}
+`;
+            } else {
+                 routerPrompt = `指令路由。当前页:"${currentTabName}" 所有页:${JSON.stringify(allTabNames)} 主题:${JSON.stringify(topicList)} 输入:"${input}"
+请返回JSON:
+1. 结构操作: {"type": "tool", "name": "函数名", "args": ["参1", "参2"]} (函数: create_tab, rename_tab, delete_tab, delete_topic, rename_topic, delete_section(topic, kw), add_to_topic(topic, txt), clear_topic, move_topic(topic, targetTab), merge_topics(src, target))
+2. 内容记录: {"type": "note", "topic": "主题名"}
+3. 内容重写: {"type": "rewrite", "topic": "主题名", "instruction": "要求"}`;
+            }
+
+            const res = await callLLM([{role: "user", content: routerPrompt}]);
+            const decision = JSON.parse(res);
+
+            if (decision.type === "tool") {
+                status.innerText = `⚡ ${decision.name}`;
+                const func = TOOLS[decision.name];
+                if(func) { const result = func(decision.args); await saveData(); renderUI(); status.innerText = `✅ ${result}`; } else status.innerText = "❌ 未知";
+            } 
+            else if (decision.type === "rewrite") {
+                status.innerText = `✍️ 重写...`;
+                const topicData = currentTopics[decision.topic];
+                if (!topicData) throw new Error("无主题");
+                const rewritePrompt = `重写数据。\n要求: ${decision.instruction}\n数据: ${JSON.stringify(topicData)}\n返回JSON: {"summary": "...", "sections": [...]}`;
+                const newContent = await callLLM([{role: "user", content: rewritePrompt}]);
+                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
+                noteData.content_map[currentTabId][decision.topic] = JSON.parse(newContent);
+                await saveData(); renderUI(); status.innerText = "✅";
+            }
+            else if (decision.type === "raw") {
+                const topic = decision.topic;
+                status.innerText = `✍️ 追加到 [${topic}]...`;
+                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
+                if(!noteData.content_map[currentTabId][topic]) noteData.content_map[currentTabId][topic] = {summary:"（自动新建）", sections:[]};
+                const tData = noteData.content_map[currentTabId][topic];
+                if(!tData.sections) tData.sections = [];
+                let lastSec = tData.sections[tData.sections.length-1];
+                if(!lastSec) tData.sections.push({title: "速记", items: [input]});
+                else lastSec.items.push(input);
+                await saveData(); renderUI(); status.innerText = "✅";
+            }
+            else {
+                const topic = decision.topic || "未分类";
+                status.innerText = `✍️ 写入...`;
+                const currentData = currentTopics[topic] || {};
+                const editPrompt = `合并知识。当前: ${JSON.stringify(currentData)}\n输入: "${input}"\n返回JSON: {"summary": "摘要", "sections": [{"title": "...", "items": ["..."]}]}`;
+                const newContent = await callLLM([{role: "user", content: editPrompt}]);
+                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
+                noteData.content_map[currentTabId][topic] = JSON.parse(newContent);
+                await saveData(); renderUI(); status.innerText = "✅";
+            }
+            setTimeout(()=>status.innerText="", 2000);
+        } catch(e) { status.innerText = "❌ " + e.message; console.error(e); document.getElementById('userInput').value = input; } finally { btn.disabled = false; }
+    }
+
+    async function callLLM(messages) {
+        const apiKey = document.getElementById('apiKey').value;
+        const modelName = document.getElementById('modelName').value;
+        if (!apiKey) throw new Error("请设置 API Key");
+        const res = await fetch(`https://api.deepseek.com/chat/completions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ model: modelName, messages: messages, response_format: { type: "json_object" }, temperature: 0.3 })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message);
+        return data.choices[0].message.content;
+    }
+</script>
+</body>
+</html>
