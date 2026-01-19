@@ -423,18 +423,43 @@
         navDiv.innerHTML = navHtml; contentDiv.innerHTML = marked.parse(md);
     }
 
-    function renderEditor() {
+function renderEditor() {
         const topics = noteData.content_map[currentTabId] || {};
         const editorDiv = document.getElementById('editorOutput');
         let html = "";
-        if(Object.keys(topics).length === 0) { editorDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">空</div>'; return; }
+        
+        if(Object.keys(topics).length === 0) { 
+            editorDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">暂无内容，请先在左侧输入</div>'; 
+            return; 
+        }
+
         for(const [name, data] of Object.entries(topics)) {
-            html += `<div class="edit-block" data-topic="${name}"><h2 style="margin-top:0;border-bottom:1px solid #eee;">${name}</h2><label class="edit-label">摘要</label><textarea class="edit-textarea summary-input">${data.summary||''}</textarea><label class="edit-label">详情</label><div>`;
+            // 👇 核心改动在这里：把 h2 换成了 input 和 button
+            html += `
+            <div class="edit-block">
+                <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
+                    <input type="text" class="edit-input topic-title-input" value="${name}" style="font-size:1.1rem; font-weight:bold; border:none; background:transparent; flex:1;" placeholder="主题名称">
+                    <button onclick="if(confirm('⚠️ 高能预警：\\n确定要删除【${name}】整个主题吗？\\n里面的所有笔记都会消失！')) this.closest('.edit-block').remove()" style="background:#fee2e2; color:#dc2626; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">🗑️ 删除整块</button>
+                </div>
+
+                <label class="edit-label">摘要 (Summary)</label>
+                <textarea class="edit-textarea summary-input">${data.summary||''}</textarea>
+                
+                <label class="edit-label">笔记详情 (Sections)</label>
+                <div>`;
+            
             if(data.sections) {
                 data.sections.forEach(sec => {
-                    html += `<div class="section-block" style="margin-bottom:10px;"><input type="text" class="edit-input section-title-input" value="${sec.title}" style="font-weight:bold;margin-bottom:5px;"><div>`;
-                    if(sec.items) sec.items.forEach(item => html += `<div class="edit-item-row"><input type="text" class="edit-input item-input" value="${item}"><span class="del-btn" onclick="this.parentElement.remove()">🗑️</span></div>`);
-                    html += `</div><button class="add-item-btn" onclick="addEmptyItem(this)">+ 添加</button></div>`;
+                    html += `
+                    <div class="section-block" style="background:white; border:1px solid #f1f5f9; padding:10px; border-radius:6px; margin-bottom:10px;">
+                        <input type="text" class="edit-input section-title-input" value="${sec.title}" style="font-weight:bold; margin-bottom:8px; color:#2563eb;" placeholder="小节标题">
+                        <div>`;
+                    if(sec.items) sec.items.forEach(item => {
+                        html += `<div class="edit-item-row"><input type="text" class="edit-input item-input" value="${item}"><span class="del-btn" onclick="this.parentElement.remove()">×</span></div>`;
+                    });
+                    html += `</div>
+                        <button class="add-item-btn" onclick="addEmptyItem(this)">+ 添加一条笔记</button>
+                    </div>`;
                 });
             }
             html += `</div></div>`;
@@ -442,17 +467,39 @@
         editorDiv.innerHTML = html;
     }
     window.addEmptyItem = function(btn) { btn.previousElementSibling.insertAdjacentHTML('beforeend', `<div class="edit-item-row"><input type="text" class="edit-input item-input" placeholder="..."><span class="del-btn" onclick="this.parentElement.remove()">🗑️</span></div>`); }
-    window.saveEditor = async function() {
+   window.saveEditor = async function() {
         const topics = {};
+        // 遍历所有还在页面上的编辑块（如果你刚才点了删除，那个块就被移除了，自然不会被保存，也就实现了“删除”功能）
         document.querySelectorAll('.edit-block').forEach(block => {
+            // 👇 获取新的大标题名字
+            const newTopicName = block.querySelector('.topic-title-input').value.trim();
+            if (!newTopicName) return; // 如果标题被删空了，就跳过不存
+
+            const summary = block.querySelector('.summary-input').value;
             const sections = [];
+            
             block.querySelectorAll('.section-block').forEach(sb => {
-                const items = []; sb.querySelectorAll('.item-input').forEach(i => { if(i.value.trim()) items.push(i.value.trim()); });
-                sections.push({title: sb.querySelector('.section-title-input').value, items});
+                const secTitle = sb.querySelector('.section-title-input').value.trim();
+                const items = []; 
+                sb.querySelectorAll('.item-input').forEach(i => { 
+                    if(i.value.trim()) items.push(i.value.trim()); 
+                });
+                // 只有当小节有标题或者有内容时才保存
+                if (secTitle || items.length > 0) {
+                    sections.push({title: secTitle || "未命名小节", items});
+                }
             });
-            topics[block.getAttribute('data-topic')] = { summary: block.querySelector('.summary-input').value, sections };
+
+            // 以新名字作为 Key 存入对象（这就实现了“重命名”）
+            topics[newTopicName] = { summary, sections };
         });
-        noteData.content_map[currentTabId] = topics; await saveData(); toggleEditMode(); alert("已保存");
+
+        noteData.content_map[currentTabId] = topics; 
+        await saveData(); 
+        
+        // 保存完自动退出编辑模式并刷新
+        toggleEditMode(); 
+        alert("✅ 修改已保存！");
     }
 
     // === Tools ===
