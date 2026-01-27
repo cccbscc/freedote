@@ -742,6 +742,71 @@ function renderEditor() {
             }
         }, 100);
     }
+    // === ⚡ 生物/工科懒人输入法 ===
+    const inputArea = document.getElementById('userInput');
+    
+    // 监听输入，实时替换
+    inputArea.addEventListener('input', function(e) {
+        let val = this.value;
+        let cursor = this.selectionStart;
+        
+        // 1. 基础符号替换 (输入 -> 变 →)
+        const replacements = {
+            '->': '→',
+            '=>': '⇒',
+            '!=': '≠',
+            '<=': '≤',
+            '>=': '≥',
+            '+-': '±',
+            '~=': '≈',
+            'degC': '°C',  // 摄氏度
+            'micro': 'μ',   // 微升的微
+            'alpha': 'α',
+            'beta': 'β',
+            'gamma': 'γ',
+            'delta': 'Δ'
+        };
+
+        // 2. 简单的化学式下标优化 (自动把 CO2 变成 CO₂)
+        // 逻辑：如果你输入了大写字母+数字(2-9)，大概率是化学式
+        // 注意：这个逻辑比较激进，如果你不喜欢可以把这段删掉
+        const chemPattern = /([A-Z][a-z]?)([2-9])\s$/; // 检测末尾是否是 "O2 " 或 "H2 " (加个空格触发)
+
+        let changed = false;
+
+        // 检查符号
+        for (const [key, char] of Object.entries(replacements)) {
+            if (val.endsWith(key, cursor)) { // 只有光标在末尾输入时才触发
+                // 把 key 替换成 char
+                const before = val.substring(0, cursor - key.length);
+                const after = val.substring(cursor);
+                this.value = before + char + after;
+                
+                // 修正光标位置
+                this.selectionStart = this.selectionEnd = cursor - key.length + 1;
+                changed = true;
+                break; 
+            }
+        }
+
+        // 检查化学式 (需要按一下空格触发，防止误伤)
+        // 比如输入 "CO2 " -> 自动变 "CO₂ "
+        if (!changed && val.slice(cursor-1, cursor) === ' ') {
+            // 获取光标前的内容
+            const textBefore = val.slice(0, cursor);
+            const match = textBefore.match(chemPattern);
+            if (match) {
+                const subMap = {'2':'₂', '3':'₃', '4':'₄', '5':'₅', '6':'₆', '7':'₇', '8':'₈', '9':'₉'};
+                const num = match[2];
+                const symbol = match[1];
+                
+                // 执行替换
+                const newText = textBefore.slice(0, -match[0].length) + symbol + subMap[num] + ' ';
+                this.value = newText + val.slice(cursor);
+                this.selectionStart = this.selectionEnd = newText.length;
+            }
+        }
+    });
 </script>
     <div class="search-modal" id="searchModal" onclick="if(event.target===this) closeSearch()">
     <div class="search-panel">
