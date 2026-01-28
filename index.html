@@ -3,381 +3,593 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Freedote Pro - 生物工程笔记台</title>
+    <title>Freedote Pro - Cloud Workbench</title>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        /* === 🎨 现代 UI 设计系统 === */
+        /* =========================================
+           🎨 Design System (设计系统)
+           ========================================= */
         :root {
-            --primary: #2563eb;       /* 核心蓝 */
+            --primary: #2563eb;       
             --primary-hover: #1d4ed8;
-            --bg-body: #f1f5f9;       /* 页面背景 (Slate-100) */
-            --bg-card: #ffffff;       /* 卡片背景 */
-            --text-main: #334155;     /* 主要文字 (Slate-700) */
-            --text-sub: #64748b;      /* 次要文字 (Slate-500) */
-            --border: #e2e8f0;        /* 边框色 */
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            --radius: 12px;
+            --bg-body: #f8fafc;       
+            --bg-panel: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #334155;     
+            --text-light: #64748b;
+            --border: #e2e8f0;        
+            --radius-lg: 12px;
+            --radius-md: 8px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
 
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            overflow: hidden; /* 禁止整页滚动 */
+        * { box-sizing: border-box; }
+
+        body { 
+            margin: 0; padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-body); 
+            color: var(--text-main); 
+            height: 100vh; 
+            overflow: hidden; /* 禁止整页滚动，使用内部滚动 */
         }
 
-        /* === 布局：左右 50:50 分屏 === */
-        .split-container {
-            display: flex;
-            width: 100%;
-            height: 100%;
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* =========================================
+           🔐 Login Overlay (登录遮罩)
+           ========================================= */
+        #loginOverlay {
+            position: fixed; inset: 0; 
+            background: rgba(248, 250, 252, 0.95); 
+            backdrop-filter: blur(5px);
+            z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-card {
+            background: white; width: 380px; padding: 40px;
+            border-radius: 16px; 
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        .login-title { font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-bottom: 5px; }
+        .login-subtitle { font-size: 0.9rem; color: #64748b; margin-bottom: 25px; }
+        
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 5px; }
+        .form-input { 
+            width: 100%; padding: 10px 12px; 
+            border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 0.95rem; outline: none; transition: border 0.2s;
+        }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
+        
+        .auth-btns { display: flex; gap: 10px; margin-top: 20px; }
+        
+        /* =========================================
+           🖥️ Main Layout (左右分屏)
+           ========================================= */
+        .split-view {
+            display: flex; width: 100%; height: 100%;
+            opacity: 0; transition: opacity 0.3s ease-in; /* 登录后渐显 */
         }
 
-        /* 左面板：工作台 (Workbench) */
+        /* 左侧：工作台 (Workbench) */
         .panel-left {
             flex: 1; /* 50% 宽度 */
-            display: flex;
-            flex-direction: column;
+            display: flex; flex-direction: column;
+            background: var(--bg-panel);
             border-right: 1px solid var(--border);
             padding: 20px;
-            background: #f8fafc;
-            min-width: 320px;
+            min-width: 350px;
         }
 
-        /* 右面板：档案柜 (Archive) */
+        /* 右侧：档案柜 (Archive) */
         .panel-right {
             flex: 1; /* 50% 宽度 */
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
+            display: flex; flex-direction: column;
             background: white;
-            overflow-y: auto;
-            min-width: 320px;
+            padding: 20px;
+            min-width: 350px;
+            overflow-y: hidden; /* 内部滚动 */
         }
 
-        /* === 组件：输入框卡片 === */
-        .input-card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 15px;
-            margin-bottom: 20px;
+        /* 通用头部栏 */
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 15px; padding-bottom: 10px;
+            border-bottom: 1px dashed var(--border);
+        }
+        .panel-title { font-weight: 700; color: #475569; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+        .panel-actions { font-size: 0.85rem; color: var(--text-light); cursor: pointer; }
+        .panel-actions:hover { color: var(--primary); }
+
+        /* =========================================
+           📝 Components: Input & Drafts
+           ========================================= */
+        /* 输入卡片 */
+        .input-wrapper {
+            background: white;
             border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 15px;
+            margin-bottom: 15px;
             transition: all 0.2s;
         }
-        .input-card:focus-within {
+        .input-wrapper:focus-within {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
-
-        textarea {
-            width: 100%;
-            height: 120px;
-            border: none;
-            outline: none;
-            resize: none;
-            font-size: 1rem;
-            line-height: 1.6;
+        textarea.main-input {
+            width: 100%; height: 100px;
+            border: none; outline: none; resize: none;
+            font-size: 1rem; line-height: 1.6;
             color: var(--text-main);
-            font-family: 'Consolas', monospace; /* 方便看对齐 */
+            font-family: 'Consolas', 'Monaco', monospace; /* 方便看对齐 */
         }
 
-        /* === 组件：三路按钮组 === */
-        .action-bar {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
+        /* 按钮组 */
+        .btn-row { display: flex; gap: 10px; margin-top: 10px; }
         .btn {
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            font-weight: 600;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
+            flex: 1; padding: 8px 0;
+            border: none; border-radius: 6px;
+            font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: background 0.1s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-        .btn:active { transform: scale(0.96); }
-        
-        /* 按钮风格 */
-        .btn-draft { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); flex: 1; }
-        .btn-draft:hover { background: #e2e8f0; }
-        
-        .btn-direct { background: #dbeafe; color: var(--primary); border: 1px solid #bfdbfe; flex: 1; }
-        .btn-direct:hover { background: #bfdbfe; }
+        .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-accent { background: #dbeafe; color: var(--primary); border: 1px solid #bfdbfe; }
+        .btn-accent:hover { background: #bfdbfe; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; padding: 12px; margin-top: 10px; box-shadow: var(--shadow-md); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
 
-        .btn-organize { 
-            background: var(--primary); color: white; width: 100%; 
-            padding: 12px; margin-top: 10px;
-            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
-        }
-        .btn-organize:hover { background: var(--primary-hover); }
-
-        /* === 组件：草稿流 (Timeline) === */
-        .draft-stream {
-            flex: 1;
-            overflow-y: auto;
-            padding-right: 5px; /* 滚动条留白 */
+        /* 草稿流容器 */
+        .draft-container {
+            flex: 1; overflow-y: auto;
             margin-bottom: 10px;
+            padding-right: 5px;
         }
-        
+        /* 单个草稿气泡 */
         .draft-bubble {
-            background: var(--bg-card);
-            border-radius: 8px;
+            background: white;
             border: 1px solid var(--border);
-            margin-bottom: 12px;
+            border-radius: 10px;
             padding: 12px;
+            margin-bottom: 12px;
             position: relative;
             transition: transform 0.1s;
         }
-        .draft-bubble:hover { border-color: #cbd5e1; }
-        
-        .draft-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            color: #94a3b8;
-            margin-bottom: 6px;
+        .draft-bubble:hover { border-color: #94a3b8; }
+        .draft-info { 
+            display: flex; justify-content: space-between; 
+            font-size: 0.75rem; color: #94a3b8; margin-bottom: 6px; 
+            border-bottom: 1px dashed #f1f5f9; padding-bottom: 4px;
         }
-        .draft-content {
-            font-size: 0.95rem;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            color: var(--text-main);
-            max-height: 150px; /* 默认最大高度 */
-            overflow: hidden;
+        .draft-text { 
+            font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+            max-height: 200px; overflow-y: hidden; /* 长文折叠 */
             position: relative;
         }
-        .draft-content.expanded { max-height: none; }
-        
-        /* 展开/折叠 提示 */
-        .expand-hint {
-            display: none;
-            font-size: 0.75rem; color: var(--primary); cursor: pointer; margin-top: 4px;
+        /* 展开全文的遮罩和按钮 */
+        .draft-expand-btn {
+            display: none; font-size: 0.75rem; color: var(--primary); 
+            cursor: pointer; margin-top: 4px; text-align: center; background: #f8fafc;
         }
 
-        .draft-actions {
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px dashed #f1f5f9;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
+        .draft-controls {
+            display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;
         }
-        .mini-btn { font-size: 0.75rem; color: #94a3b8; cursor: pointer; }
-        .mini-btn:hover { color: var(--primary); }
-        .mini-btn.del:hover { color: #ef4444; }
+        .icon-btn { cursor: pointer; font-size: 0.85rem; color: #cbd5e1; transition: color 0.2s; }
+        .icon-btn:hover { color: var(--primary); }
+        .icon-btn.del:hover { color: #ef4444; }
 
-        /* === 右侧：折叠面板 (Accordion) === */
-        .nav-toggle {
-            cursor: pointer; padding: 10px; background: #f8fafc; border-radius: 8px;
-            margin-bottom: 15px; font-weight: bold; color: var(--text-sub);
-            user-select: none;
+        /* =========================================
+           📚 Components: Knowledge Base
+           ========================================= */
+        /* 搜索框 */
+        .search-box {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid var(--border); border-radius: 8px;
+            margin-bottom: 15px; outline: none;
+            background: #f8fafc;
         }
-        .nav-content { display: none; padding: 10px; }
-        .nav-content.show { display: block; }
-        
+        .search-box:focus { background: white; border-color: var(--primary); }
+
+        /* 内容区域 */
+        .kb-scroll-area { flex: 1; overflow-y: auto; padding-right: 5px; }
+
+        /* Topic 卡片 */
         .topic-card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            background: white;
             border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            overflow: hidden; /* 防止圆角溢出 */
         }
         .topic-header {
-            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px 20px;
+            background: #fff;
+            display: flex; justify-content: space-between; align-items: center;
             cursor: pointer; user-select: none;
+            border-bottom: 1px solid transparent;
+            transition: background 0.2s;
         }
-        .topic-title { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin: 0; }
-        .topic-arrow { transition: transform 0.2s; color: #cbd5e1; }
+        .topic-header:hover { background: #f8fafc; }
+        .topic-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; margin: 0; }
+        .topic-toggle { color: #cbd5e1; font-size: 0.8rem; transition: transform 0.3s; }
+        
+        /* 折叠状态 */
+        .topic-card.collapsed .topic-header { border-bottom: none; }
         .topic-card.collapsed .topic-body { display: none; }
-        .topic-card.collapsed .topic-arrow { transform: rotate(-90deg); }
+        .topic-card.collapsed .topic-toggle { transform: rotate(-90deg); }
 
-        .topic-body { margin-top: 15px; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .topic-body { padding: 20px; background: #fff; border-top: 1px solid #f1f5f9; }
+        
+        /* 总结块 */
+        .summary-box {
+            background: #fffbeb; color: #92400e; 
+            padding: 10px 15px; border-radius: 6px;
+            font-size: 0.9rem; margin-bottom: 15px;
+            border-left: 3px solid #f59e0b;
+        }
+        
+        /* 列表项 */
+        .section-title { font-size: 0.95rem; font-weight: 700; color: #475569; margin: 15px 0 8px 0; }
+        .kb-list { padding-left: 20px; margin: 0; }
+        .kb-list li { margin-bottom: 6px; line-height: 1.6; color: #334155; }
+        
+        /* 搜索高亮 */
+        .highlight { background: #fef08a; padding: 0 2px; border-radius: 2px; }
 
-        /* API 弹窗 */
-        #apiModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; justify-content: center; align-items: center; }
-        .modal-box { background: white; padding: 25px; border-radius: 12px; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        /* =========================================
+           ⚙️ Settings & Footer
+           ========================================= */
+        .status-bar {
+            margin-top: 10px; font-size: 0.8rem; color: #94a3b8;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .sync-indicator { display: flex; align-items: center; gap: 6px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+        .dot.online { background: #22c55e; box-shadow: 0 0 4px #22c55e; }
+        .dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+
+        /* 设置 API 的弹窗 */
+        #apiModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 320px; }
     </style>
 </head>
 <body>
 
-<div id="apiModal">
-    <div class="modal-box">
-        <h3>🔑 设置 DeepSeek API</h3>
-        <p style="font-size:0.85rem; color:#666;">用于“整理草稿”功能</p>
-        <input type="password" id="apiKeyInput" placeholder="sk-..." style="width: 100%; padding: 10px; margin: 10px 0; border:1px solid #ddd; border-radius:6px;">
-        <button onclick="saveApiKey()" class="btn btn-organize">保存并开始</button>
-    </div>
-</div>
-
-<div class="split-container">
-    
-    <div class="panel-left">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <span style="font-weight:bold; font-size:1.1rem;">🧪 实验台 / 草稿箱</span>
-            <span style="font-size:0.8rem; cursor:pointer;" onclick="document.getElementById('apiModal').style.display='flex'">⚙️ 设置</span>
-        </div>
-
-        <div class="input-card">
-            <textarea id="mainInput" placeholder="记录想法、数据、文献... (支持 CO2+空格 自动下标)"></textarea>
-            <div class="action-bar">
-                <button class="btn btn-draft" onclick="saveToDraft()">
-                    ⬇️ 扔进草稿箱
-                </button>
-                <button class="btn btn-direct" onclick="directSave()">
-                    📝 速记上屏
-                </button>
-            </div>
-        </div>
-
-        <div style="margin-bottom:5px; font-size:0.8rem; color:#94a3b8; display:flex; justify-content:space-between;">
-            <span>缓冲池 (<span id="draftCount">0</span>)</span>
-            <span style="cursor:pointer; color:#ef4444;" onclick="clearDrafts()">清空</span>
-        </div>
-        
-        <div id="draftStream" class="draft-stream">
-            </div>
-
-        <button id="organizeBtn" class="btn btn-organize" onclick="organizeAll()">
-            🧠 AI 一键整理归档
-        </button>
-    </div>
-
-    <div class="panel-right">
-        <div style="margin-bottom:20px;">
-            <input type="text" id="searchInput" placeholder="🔍 搜索全局内容..." oninput="handleSearch(this.value)" 
-                   style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px;">
+    <div id="loginOverlay">
+        <div class="login-card">
+            <div class="login-title">Freedote Pro</div>
+            <div class="login-subtitle">生物工程研究生专用 · GTD 笔记台</div>
             
-            <div class="nav-toggle" onclick="toggleNav()">
-                📑 目录索引 <span id="navArrow" style="float:right;">▼</span>
-                <div id="navList" class="nav-content"></div>
+            <div class="input-group">
+                <label>邮箱</label>
+                <input type="email" id="email" class="form-input" placeholder="name@example.com">
             </div>
-        </div>
+            <div class="input-group">
+                <label>密码</label>
+                <input type="password" id="password" class="form-input" placeholder="••••••••">
+            </div>
 
-        <div id="contentArea">
-            <div style="text-align:center; color:#cbd5e1; margin-top:100px;">
-                知识库暂无内容<br>请在左侧添加笔记并整理
+            <div class="auth-btns">
+                <button class="btn btn-secondary" onclick="handleSignUp()">注册</button>
+                <button class="btn btn-primary" style="margin:0" onclick="handleLogin()">登录</button>
+            </div>
+            
+            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+                <span style="font-size:0.8rem; color:#94a3b8; cursor:pointer; text-decoration:underline;" onclick="startOfflineMode()">
+                    跳过登录，使用离线模式 ➔
+                </span>
             </div>
         </div>
     </div>
-</div>
+
+    <div id="apiModal">
+        <div class="modal-content">
+            <h3 style="margin-top:0">⚙️ 设置 DeepSeek API</h3>
+            <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">用于驱动“AI 一键整理”功能。</p>
+            <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-..." style="margin-bottom:15px;">
+            <button class="btn btn-primary" onclick="saveApiKey()">保存配置</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('apiModal').style.display='none'" style="margin-top:10px">取消</button>
+        </div>
+    </div>
+
+    <div class="split-view" id="mainApp">
+        
+        <div class="panel-left">
+            <div class="panel-header">
+                <div class="panel-title">🧪 实验台 / 草稿箱</div>
+                <div class="panel-actions" onclick="openApiSettings()">⚙️ 配置</div>
+            </div>
+
+            <div class="input-wrapper">
+                <textarea id="mainInput" class="main-input" placeholder="在此速记... 支持 CO2+空格 自动下标"></textarea>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="saveToDraft()">
+                        <span>⬇️</span> 扔进草稿箱
+                    </button>
+                    <button class="btn btn-accent" onclick="directSave()">
+                        <span>📝</span> 速记上屏
+                    </button>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.8rem; color:#94a3b8;">
+                <span>缓冲池 (<span id="draftCount">0</span>)</span>
+                <span style="cursor:pointer; color:#ef4444;" onclick="clearAllDrafts()">清空</span>
+            </div>
+            
+            <div id="draftStream" class="draft-container">
+                </div>
+
+            <button id="organizeBtn" class="btn btn-primary" onclick="organizeAll()">
+                🧠 AI 一键整理归档
+            </button>
+
+            <div class="status-bar">
+                <div class="sync-indicator">
+                    <div id="syncDot" class="dot"></div>
+                    <span id="userStatus">未连接</span>
+                </div>
+                <div style="cursor:pointer; text-decoration:underline;" onclick="handleLogout()">退出</div>
+            </div>
+        </div>
+
+        <div class="panel-right">
+            <div class="panel-header">
+                <div class="panel-title">📚 结构化知识库</div>
+                <div class="panel-actions" onclick="expandAll()">展开全部</div>
+            </div>
+
+            <input type="text" class="search-box" placeholder="🔍 全局搜索 (关键词高亮)..." oninput="handleSearch(this.value)">
+
+            <div id="kbContent" class="kb-scroll-area">
+                <div style="text-align:center; color:#cbd5e1; margin-top:100px;">
+                    <div>📭</div>
+                    <div style="margin-top:10px;">暂无归档内容</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <script>
-    // === 核心数据 ===
+    // ==========================================
+    // 0️⃣ 配置区 (CONFIGURATION)
+    // ==========================================
+    // ⚠️ 请在此处填入你的 Supabase URL 和 Anon Key
+    const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; // 👈 填这里
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; // 👈 填这里
+
+    // 全局状态
     let appData = {
-        drafts: [],      // 草稿数组
-        kb: {}           // 知识库对象 { "Topic": { summary, sections:[] } }
+        drafts: [],     // 草稿数组
+        kb: {}          // 知识库 { "Topic": { summary, sections: [] } }
     };
+    let currentUser = null;
+    let isOffline = false;
+    let supabase = null;
+    let saveTimer = null;
 
-    // === 初始化 ===
-    window.onload = function() {
-        const saved = localStorage.getItem('freedote_v3_data');
-        if (saved) {
-            appData = JSON.parse(saved);
-            renderDrafts();
-            renderKB();
+    // ==========================================
+    // 1️⃣ 初始化与登录 (AUTH & INIT)
+    // ==========================================
+    window.onload = async function() {
+        setupBioTyping(); // 启动生物输入法监听
+
+        // 检查 Supabase 是否已填
+        if (SUPABASE_URL && SUPABASE_KEY) {
+            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            
+            // 自动恢复会话
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                await enterCloudMode();
+                return; // 直接进入
+            }
+        } else {
+            console.warn("未配置 Supabase，仅限离线模式");
         }
-        if(!localStorage.getItem('deepseek_key')) document.getElementById('apiModal').style.display = 'flex';
         
-        // 绑定 Bio-Typing 监听器
-        setupBioTyping();
+        // 没登录则显示遮罩
+        document.getElementById('loginOverlay').style.display = 'flex';
     };
 
-    // === 1. 左侧：草稿箱逻辑 ===
+    // 登录处理
+    async function handleLogin() {
+        if (!supabase) return alert("请在代码中配置 Supabase URL/Key");
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert("登录失败: " + error.message);
+        else {
+            currentUser = data.user;
+            await enterCloudMode();
+        }
+    }
 
+    // 注册处理
+    async function handleSignUp() {
+        if (!supabase) return alert("未配置 Supabase");
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) alert("注册失败: " + error.message);
+        else alert("注册确认邮件已发送，请查收！");
+    }
+
+    // 离线模式
+    function startOfflineMode() {
+        isOffline = true;
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('mainApp').style.opacity = '1';
+        document.getElementById('userStatus').innerText = "离线模式";
+        
+        // 读取本地缓存
+        const local = localStorage.getItem('freedote_local_data');
+        if (local) appData = JSON.parse(local);
+        renderAll();
+    }
+
+    // 云端模式入口
+    async function enterCloudMode() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('mainApp').style.opacity = '1';
+        document.getElementById('userStatus').innerText = currentUser.email;
+        updateSyncStatus('syncing');
+
+        // 拉取云端数据
+        try {
+            // 假设表名 'notes'，字段 'content' (jsonb)
+            const { data, error } = await supabase
+                .from('notes')
+                .select('content')
+                .eq('user_id', currentUser.id)
+                .single();
+
+            if (data && data.content) {
+                appData = data.content;
+                // 数据结构补全 (防止旧数据报错)
+                if (!appData.drafts) appData.drafts = [];
+                if (!appData.kb) appData.kb = {};
+            }
+        } catch (e) {
+            console.error("拉取数据错误:", e);
+        }
+        
+        renderAll();
+        updateSyncStatus('online');
+    }
+
+    // 退出登录
+    async function handleLogout() {
+        if (supabase) await supabase.auth.signOut();
+        location.reload();
+    }
+
+    // ==========================================
+    // 2️⃣ 数据保存与同步 (SYNC)
+    // ==========================================
+    function saveData() {
+        // 1. 本地必存 (防丢)
+        localStorage.setItem('freedote_local_data', JSON.stringify(appData));
+        
+        // 2. 云端同步 (防抖: 2秒后执行)
+        if (!isOffline && currentUser && supabase) {
+            updateSyncStatus('syncing');
+            clearTimeout(saveTimer);
+            
+            saveTimer = setTimeout(async () => {
+                // Upsert (存在则更新，不存在则插入)
+                const { error } = await supabase
+                    .from('notes')
+                    .upsert({ user_id: currentUser.id, content: appData }, { onConflict: 'user_id' });
+
+                if (error) {
+                    console.error("同步失败", error);
+                    alert("⚠️ 云端同步失败，数据已保存到本地");
+                } else {
+                    updateSyncStatus('online');
+                }
+            }, 2000);
+        }
+    }
+
+    function updateSyncStatus(status) {
+        const dot = document.getElementById('syncDot');
+        dot.className = `dot ${status}`;
+        const label = document.getElementById('userStatus');
+        if (status === 'syncing') label.innerText = '同步中...';
+        if (status === 'online') label.innerText = currentUser ? currentUser.email : '在线';
+    }
+
+    // ==========================================
+    // 3️⃣ 核心业务逻辑 (CORE LOGIC)
+    // ==========================================
+    
+    // --- 渲染总入口 ---
+    function renderAll() {
+        renderDrafts();
+        renderKB();
+        document.getElementById('draftCount').innerText = appData.drafts.length;
+    }
+
+    // --- 草稿箱逻辑 ---
     function saveToDraft() {
         const input = document.getElementById('mainInput');
         const text = input.value.trim();
         if (!text) return;
 
+        // 加到前面
         appData.drafts.unshift({
             id: Date.now(),
             text: text,
-            time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            time: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})
         });
         
         saveData();
         input.value = '';
-        input.focus();
+        input.focus(); // 保持焦点以便连续输入
         renderDrafts();
-    }
-
-    // 速记上屏 (跳过草稿，直接追加到 "速记/Daily Log" 主题)
-    function directSave() {
-        const input = document.getElementById('mainInput');
-        const text = input.value.trim();
-        if (!text) return;
-
-        // 默认归类到 "📅 速记日志"
-        const targetTopic = "📅 速记日志";
-        if (!appData.kb[targetTopic]) {
-            appData.kb[targetTopic] = { summary: "未经 AI 整理的快速记录", sections: [] };
-        }
-        
-        // 添加到第一个 section
-        let section = appData.kb[targetTopic].sections[0];
-        if (!section) {
-            section = { title: "今日记录", items: [] };
-            appData.kb[targetTopic].sections.push(section);
-        }
-        section.items.push(text);
-
-        saveData();
-        input.value = '';
-        renderKB();
-        // 自动滚动到该 Topic
-        setTimeout(() => {
-            const el = document.getElementById(`topic-${targetTopic}`);
-            if(el) {
-                el.scrollIntoView({behavior: "smooth"});
-                el.classList.remove('collapsed'); // 自动展开
-            }
-        }, 100);
     }
 
     function renderDrafts() {
         const container = document.getElementById('draftStream');
-        document.getElementById('draftCount').innerText = appData.drafts.length;
-        
+        const countSpan = document.getElementById('draftCount');
+        countSpan.innerText = appData.drafts.length;
+
         if (appData.drafts.length === 0) {
-            container.innerHTML = '<div style="text-align:center; color:#cbd5e1; padding:20px;">暂无草稿<br>随手记点什么吧...</div>';
+            container.innerHTML = `<div style="text-align:center; color:#cbd5e1; padding:20px; font-size:0.9rem;">
+                👋 嘿，这里是空的。<br>在上面写点什么，然后点击“⬇️”存下来。
+            </div>`;
             return;
         }
 
         let html = '';
-        appData.drafts.forEach((d, index) => {
-            const isLong = d.text.length > 100; // 超过100字算长文
+        appData.drafts.forEach((d, i) => {
+            // 判断长文 (超过100字符)
+            const isLong = d.text.length > 100;
+            const contentDisplay = isLong ? d.text : d.text; // CSS控制折叠
+            
             html += `
                 <div class="draft-bubble">
-                    <div class="draft-meta">
+                    <div class="draft-info">
                         <span>🕒 ${d.time}</span>
-                        <span>#${index+1}</span>
+                        <span>#${appData.drafts.length - i}</span>
                     </div>
-                    <div class="draft-content ${isLong ? 'collapsed-text' : ''}" id="draft-txt-${d.id}">
-                        ${escapeHtml(d.text)}
-                    </div>
-                    ${isLong ? `<div class="expand-hint" onclick="toggleDraftExpand('${d.id}')">展开全文 ▼</div>` : ''}
                     
-                    <div class="draft-actions">
-                        <span class="mini-btn" onclick="sendSingleDraft(${index})" title="直接存入文档">🚀 速记</span>
-                        <span class="mini-btn" onclick="copyDraft('${escapeHtml(d.text)}')" title="复制">📋</span>
-                        <span class="mini-btn del" onclick="deleteDraft(${index})">🗑️ 删除</span>
+                    <div class="draft-text ${isLong ? 'collapsed' : ''}" id="draft-${d.id}" 
+                         style="${isLong ? 'max-height:80px;mask-image:linear-gradient(180deg,#000 60%,transparent);' : ''}">
+                         ${escapeHtml(d.text)}
+                    </div>
+                    
+                    ${isLong ? `<div class="draft-expand-btn" style="display:block" onclick="toggleExpand('${d.id}', this)">展开全文 ▼</div>` : ''}
+
+                    <div class="draft-controls">
+                        <span class="icon-btn" title="直接上屏" onclick="promoteDraft(${i})">📝 速记</span>
+                        <span class="icon-btn" title="复制" onclick="copyText('${escapeHtml(d.text)}')">📋</span>
+                        <span class="icon-btn del" title="删除" onclick="deleteDraft(${i})">🗑️</span>
                     </div>
                 </div>
             `;
@@ -385,68 +597,118 @@
         container.innerHTML = html;
     }
 
-    function deleteDraft(index) {
-        appData.drafts.splice(index, 1);
-        saveData();
-        renderDrafts();
+    function toggleExpand(id, btn) {
+        const el = document.getElementById(`draft-${id}`);
+        if (el.style.maxHeight) {
+            el.style.maxHeight = '';
+            el.style.maskImage = '';
+            btn.innerText = '收起 ▲';
+        } else {
+            el.style.maxHeight = '80px';
+            el.style.maskImage = 'linear-gradient(180deg,#000 60%,transparent)';
+            btn.innerText = '展开全文 ▼';
+        }
     }
 
-    function sendSingleDraft(index) {
-        const d = appData.drafts[index];
-        // 模拟写入输入框并调用 directSave
-        document.getElementById('mainInput').value = d.text;
-        directSave();
-        deleteDraft(index); // 移出草稿箱
-    }
-    
-    function toggleDraftExpand(id) {
-        const el = document.getElementById(`draft-txt-${id}`);
-        const hint = el.nextElementSibling;
-        if(el.style.maxHeight === 'none') {
-            el.style.maxHeight = '150px';
-            hint.innerText = '展开全文 ▼';
-        } else {
-            el.style.maxHeight = 'none';
-            hint.innerText = '收起 ▲';
+    function deleteDraft(index) {
+        if(confirm("确定删除这条草稿吗？")) {
+            appData.drafts.splice(index, 1);
+            saveData();
+            renderDrafts();
         }
     }
     
-    function clearDrafts() {
-        if(confirm("确定清空所有草稿？")) {
+    function clearAllDrafts() {
+        if(appData.drafts.length === 0) return;
+        if(confirm("⚠️ 确定清空所有草稿吗？")) {
             appData.drafts = [];
             saveData();
             renderDrafts();
         }
     }
 
-    // === 2. 核心：AI 整理 ===
-    async function organizeAll() {
-        if (appData.drafts.length === 0) return alert("草稿箱是空的");
+    // 把草稿转正 (Promote)
+    function promoteDraft(index) {
+        const d = appData.drafts[index];
+        // 填入输入框并调用速记
+        document.getElementById('mainInput').value = d.text;
+        directSave();
+        // 删掉原草稿
+        appData.drafts.splice(index, 1);
+        saveData();
+        renderDrafts();
+    }
+
+    // --- 速记逻辑 ---
+    function directSave() {
+        const input = document.getElementById('mainInput');
+        const text = input.value.trim();
+        if(!text) return;
+
+        const dateKey = new Date().toLocaleDateString();
+        const topic = `📅 日常记录 (${dateKey})`;
         
+        // 确保结构存在
+        if (!appData.kb[topic]) {
+            appData.kb[topic] = { summary: "未经 AI 整理的速记流水账", sections: [] };
+        }
+        let section = appData.kb[topic].sections.find(s => s.title === "速记");
+        if (!section) {
+            section = { title: "速记", items: [] };
+            appData.kb[topic].sections.push(section);
+        }
+        
+        // 插入
+        section.items.push(text);
+        
+        saveData();
+        input.value = '';
+        renderKB();
+        
+        // 滚动到该 Topic
+        setTimeout(() => {
+            const el = document.getElementById(`topic-${topic}`);
+            if(el) {
+                el.scrollIntoView({behavior:'smooth'});
+                el.classList.remove('collapsed');
+            }
+        }, 100);
+    }
+
+    // --- AI 整理逻辑 ---
+    async function organizeAll() {
+        if (appData.drafts.length === 0) return alert("草稿箱是空的，不用整理。");
+        
+        const apiKey = localStorage.getItem('deepseek_key');
+        if (!apiKey) {
+            openApiSettings();
+            return alert("请先设置 API Key");
+        }
+
         const btn = document.getElementById('organizeBtn');
-        const originalText = btn.innerText;
-        btn.innerText = "⏳ AI 正在思考结构...";
+        const oldText = btn.innerText;
+        btn.innerText = "⏳ 正在读取草稿并分析...";
         btn.disabled = true;
 
-        const apiKey = localStorage.getItem('deepseek_key');
-        if(!apiKey) return alert("请先在右上角设置 API Key");
-
         // 构造 Prompt
-        const draftText = appData.drafts.map(d => `[${d.time}] ${d.text}`).join("\n\n");
-        const currentKB = JSON.stringify(appData.kb);
+        const draftContent = appData.drafts.map(d => `[${d.time}] ${d.text}`).join("\n");
+        const kbContext = JSON.stringify(appData.kb); // 全量发送可能太大，实际建议只发 keys 或 summary，这里先发全量
         
         const prompt = `
-            我是你的科研笔记助手。请将以下【新草稿】整理归纳进【现有知识库】。
+            【角色】你是一个严谨的生物工程科研助手。
+            【任务】将以下"碎片草稿"整理归纳进"现有知识库"。
             
-            【现有结构】: ${currentKB}
-            【新草稿】: 
-            ${draftText}
+            【现有知识库 (JSON)】: 
+            ${kbContext}
             
-            【任务】:
-            1. 识别新草稿的主题，将其归类到现有的 Topic 中，或创建新 Topic。
-            2. 如果是实验数据，归类到实验记录；如果是文献，归类到文献阅读。
-            3. 请只返回合并后的最新 JSON 数据。不要 Markdown，不要废话。
-            4. JSON 格式: { "Topic名称": { "summary": "...", "sections": [{ "title": "...", "items": ["..."] }] } }
+            【待整理草稿】:
+            ${draftContent}
+            
+            【操作要求】:
+            1. 分析草稿内容，将其归类到现有 Topic，或创建合适的新 Topic (如: 实验记录、文献阅读、灵感)。
+            2. 提取关键数据、结论，更新 summary。
+            3. 必须只返回合并后的完整 JSON 数据。
+            4. 严禁使用 Markdown 代码块标记，直接返回纯 JSON 字符串。
         `;
 
         try {
@@ -459,163 +721,201 @@
                     temperature: 0.1
                 })
             });
-
-            const data = await response.json();
-            const jsonStr = data.choices[0].message.content.replace(/```json|```/g, '').trim();
             
+            const data = await response.json();
+            let jsonStr = data.choices[0].message.content;
+            // 清理可能的 markdown 标记
+            jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            // 更新数据
             appData.kb = JSON.parse(jsonStr);
-            appData.drafts = []; // 整理成功后清空草稿
+            appData.drafts = []; // 整理成功才清空
             
             saveData();
-            renderKB();
-            renderDrafts();
+            renderAll();
+            btn.innerText = "✅ 整理完成！";
             
-            btn.innerText = "✅ 整理完成";
-            setTimeout(() => btn.innerText = originalText, 2000);
-
         } catch (e) {
             console.error(e);
-            alert("整理失败，请检查 API Key 或网络");
-            btn.innerText = originalText;
+            alert("整理失败: " + e.message);
         } finally {
             btn.disabled = false;
+            setTimeout(() => btn.innerText = oldText, 2000);
         }
     }
 
-    // === 3. 右侧：知识库渲染 (支持折叠) ===
-    function renderKB() {
-        const container = document.getElementById('contentArea');
-        const navList = document.getElementById('navList');
+    // --- 知识库渲染 ---
+    function renderKB(filterText = '') {
+        const container = document.getElementById('kbContent');
         const kb = appData.kb;
         
         if (Object.keys(kb).length === 0) {
-            container.innerHTML = '<div style="text-align:center; color:#cbd5e1; margin-top:100px;">暂无数据</div>';
-            navList.innerHTML = '';
+            container.innerHTML = `<div style="text-align:center;color:#cbd5e1;margin-top:50px;">
+                📚 知识库为空<br>请在左侧添加笔记并点击整理
+            </div>`;
             return;
         }
 
         let html = '';
-        let navHtml = '';
-
+        
+        // 遍历所有 Topic
         for (const [topic, data] of Object.entries(kb)) {
-            // 导航项
-            navHtml += `<div style="padding:4px; cursor:pointer;" onclick="scrollToTopic('${topic}')">📄 ${topic}</div>`;
+            // 搜索过滤逻辑
+            let hitSearch = false;
+            if (filterText) {
+                const str = JSON.stringify(data).toLowerCase() + topic.toLowerCase();
+                if (str.includes(filterText.toLowerCase())) hitSearch = true;
+                else continue; // 不匹配则跳过
+            }
 
-            // 内容块 (默认展开，点击标题折叠)
+            // 渲染 Sections
             let sectionsHtml = '';
             if (data.sections) {
                 data.sections.forEach(sec => {
-                    const itemsHtml = sec.items.map(i => `<li>${renderMarkdown(i)}</li>`).join('');
+                    // 渲染 Items
+                    const itemsHtml = sec.items.map(item => {
+                        // Markdown 渲染 + 高亮
+                        let rendered = marked.parseInline(item);
+                        rendered = renderBioSubscripts(rendered); // 渲染化学式
+                        if (filterText) {
+                            // 简单高亮替换
+                            const reg = new RegExp(`(${filterText})`, 'gi');
+                            rendered = rendered.replace(reg, '<span class="highlight">$1</span>');
+                        }
+                        return `<li>${rendered}</li>`;
+                    }).join('');
+                    
                     sectionsHtml += `
-                        <div style="margin-bottom:15px;">
-                            <h4 style="margin:10px 0 5px; color:#475569;">${sec.title}</h4>
-                            <ul style="margin:0; padding-left:20px; color:#334155; line-height:1.6;">${itemsHtml}</ul>
-                        </div>
+                        <div class="section-title">${sec.title}</div>
+                        <ul class="kb-list">${itemsHtml}</ul>
                     `;
                 });
             }
 
+            // 拼接 Topic 卡片
             html += `
-                <div class="topic-card" id="topic-${topic}">
+                <div class="topic-card ${hitSearch ? '' : 'collapsed'}" id="topic-${topic}">
                     <div class="topic-header" onclick="toggleTopic(this)">
                         <div class="topic-title">${topic}</div>
-                        <div class="topic-arrow">▼</div>
+                        <div class="topic-toggle">▼</div>
                     </div>
                     <div class="topic-body">
-                        <blockquote style="background:#f1f5f9; padding:10px; border-left:4px solid var(--primary); margin:10px 0;">
-                            💡 ${data.summary || '无总结'}
-                        </blockquote>
+                        ${data.summary ? `<div class="summary-box">💡 ${data.summary}</div>` : ''}
                         ${sectionsHtml}
                     </div>
                 </div>
             `;
         }
-
-        container.innerHTML = html;
-        navList.innerHTML = navHtml;
         
-        // 渲染数学公式
-        renderMathInElement(container, { delimiters: [{left: '$', right: '$', display: false}] });
+        container.innerHTML = html || `<div style="text-align:center;color:#cbd5e1;padding:20px">未找到匹配内容</div>`;
+        
+        // 最后渲染数学公式
+        renderMathInElement(container, {
+            delimiters: [{left: '$', right: '$', display: false}],
+            throwOnError: false
+        });
     }
 
-    // 切换 Topic 折叠
-    function toggleTopic(headerEl) {
-        headerEl.parentElement.classList.toggle('collapsed');
-    }
-
-    // 切换导航折叠
-    function toggleNav() {
-        const nav = document.getElementById('navList');
-        const arrow = document.getElementById('navArrow');
-        nav.classList.toggle('show');
-        arrow.innerText = nav.classList.contains('show') ? '▲' : '▼';
-    }
-
-    function scrollToTopic(id) {
-        const el = document.getElementById(`topic-${id}`);
-        if(el) {
-            el.scrollIntoView({behavior: 'smooth'});
-            el.classList.remove('collapsed'); // 跳转时自动展开
+    // --- 搜索功能 (补回来了！) ---
+    function handleSearch(text) {
+        renderKB(text.trim());
+        // 如果有搜索词，自动展开所有结果
+        if (text.trim()) {
+            document.querySelectorAll('.topic-card').forEach(el => el.classList.remove('collapsed'));
         }
     }
 
-    // === 4. 工具函数 ===
-    
-    // Markdown + Bio 渲染
-    function renderMarkdown(text) {
-        let html = marked.parseInline(text);
-        // 渲染完再替换一下漏网的化学式 (可选)
-        html = html.replace(/CO2/g, 'CO₂').replace(/H2O/g, 'H₂O');
-        return html;
-    }
-
-    function saveData() {
-        localStorage.setItem('freedote_v3_data', JSON.stringify(appData));
+    function toggleTopic(header) {
+        header.parentElement.classList.toggle('collapsed');
     }
     
-    function saveApiKey() {
-        const key = document.getElementById('apiKeyInput').value;
-        if(key) { localStorage.setItem('deepseek_key', key); document.getElementById('apiModal').style.display = 'none'; }
+    function expandAll() {
+        document.querySelectorAll('.topic-card').forEach(el => el.classList.remove('collapsed'));
     }
 
-    function escapeHtml(text) {
-        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function copyDraft(text) {
-        navigator.clipboard.writeText(text);
-        alert('已复制');
-    }
-
-    // === 5. 生物输入法 (Bio-Typing) 监听器 ===
+    // ==========================================
+    // 4️⃣ 生物工程专属优化 (Bio-Features)
+    // ==========================================
+    
+    // 生物输入法监听器 (完整版，不缩水)
     function setupBioTyping() {
-        const inputArea = document.getElementById('mainInput');
-        inputArea.addEventListener('input', function(e) {
+        const input = document.getElementById('mainInput');
+        input.addEventListener('input', function(e) {
             const cursor = this.selectionStart;
             const val = this.value;
             
-            // 只有刚输入了 "空格" 才触发
-            if (e.data === ' ' || val.slice(cursor-1, cursor) === ' ') {
-                const textChunk = val.slice(Math.max(0, cursor-5), cursor);
-                // 正则：字母+数字+空格 (如 CO2 )
-                if (/[a-zA-Z][0-9]\s$/.test(textChunk)) {
-                    const numChar = textChunk.match(/[0-9]/)[0];
-                    const subMap = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
-                    const before = val.slice(0, cursor-2);
-                    const newNum = subMap[numChar];
-                    const after = val.slice(cursor);
-                    this.value = before + newNum + " " + after;
-                    this.selectionStart = this.selectionEnd = cursor - 1; 
-                }
+            // 1. 箭头优化: -> 变 →
+            if (val.endsWith('->', cursor)) {
+                replaceAt(this, cursor-2, cursor, '→');
+                return;
             }
-            // 箭头 -> 变 →
-            if (val.slice(cursor-2, cursor) === '->') {
-                this.value = val.slice(0, cursor-2) + '→' + val.slice(cursor);
-                this.selectionStart = this.selectionEnd = cursor - 1;
+            if (val.endsWith('=>', cursor)) {
+                replaceAt(this, cursor-2, cursor, '⇒');
+                return;
+            }
+
+            // 2. 化学式下标优化 (CO2 + 空格)
+            // 只有按下空格时触发
+            if (e.data === ' ' || val.slice(cursor-1, cursor) === ' ') {
+                // 截取光标前5个字符进行分析
+                const chunk = val.slice(Math.max(0, cursor-6), cursor);
+                // 正则：[字母][数字][空格]结尾
+                // 比如 "O2 " 或 "He2 "
+                const match = chunk.match(/([a-zA-Z]+)([0-9])\s$/);
+                
+                if (match) {
+                    const fullMatch = match[0]; // e.g. "O2 "
+                    const letters = match[1];   // "O"
+                    const num = match[2];       // "2"
+                    
+                    const subMap = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+                    const newStr = letters + subMap[num] + ' ';
+                    
+                    // 执行替换
+                    const start = cursor - fullMatch.length;
+                    replaceAt(this, start, cursor, newStr);
+                }
             }
         });
     }
-</script>
 
+    // 辅助替换函数，保持光标位置
+    function replaceAt(input, start, end, text) {
+        const val = input.value;
+        const before = val.slice(0, start);
+        const after = val.slice(end);
+        input.value = before + text + after;
+        input.selectionStart = input.selectionEnd = start + text.length;
+    }
+
+    // 渲染时也再次检查 (防止漏网之鱼)
+    function renderBioSubscripts(text) {
+        // 简单的替换常见分子
+        return text.replace(/CO2/g, 'CO₂')
+                   .replace(/H2O/g, 'H₂O')
+                   .replace(/O2/g, 'O₂');
+    }
+
+    // 工具函数
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    
+    function copyText(text) {
+        navigator.clipboard.writeText(text);
+    }
+    
+    function openApiSettings() {
+        document.getElementById('apiModal').style.display = 'flex';
+        document.getElementById('apiKeyInput').value = localStorage.getItem('deepseek_key') || '';
+    }
+    
+    function saveApiKey() {
+        const k = document.getElementById('apiKeyInput').value;
+        if(k) localStorage.setItem('deepseek_key', k);
+        document.getElementById('apiModal').style.display = 'none';
+    }
+
+</script>
 </body>
 </html>
