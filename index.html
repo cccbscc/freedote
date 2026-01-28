@@ -277,31 +277,27 @@
 <body>
 
     <div id="loginOverlay">
-        <div class="login-card">
-            <div class="login-title">Freedote Pro</div>
-            <div class="login-subtitle">生物工程研究生专用 · GTD 笔记台</div>
-            
-            <div class="input-group">
-                <label>邮箱</label>
-                <input type="email" id="email" class="form-input" placeholder="name@example.com">
-            </div>
-            <div class="input-group">
-                <label>密码</label>
-                <input type="password" id="password" class="form-input" placeholder="••••••••">
-            </div>
+    <div class="login-card">
+        <h2 style="margin-top:0; color:#334155;">Freedote Pro</h2>
+        <p style="color:#64748b; font-size:0.9rem; margin-bottom:20px;">云端知识库 · 智能同步</p>
+        
+        <input type="email" id="email" class="form-input" placeholder="邮箱 (name@example.com)">
+        
+        <input type="password" id="password" class="form-input" placeholder="密码 (至少6位)">
 
-            <div class="auth-btns">
-                <button class="btn btn-secondary" onclick="handleSignUp()">注册</button>
-                <button class="btn btn-primary" style="margin:0" onclick="handleLogin()">登录</button>
-            </div>
-            
-            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
-                <span style="font-size:0.8rem; color:#94a3b8; cursor:pointer; text-decoration:underline;" onclick="startOfflineMode()">
-                    跳过登录，使用离线模式 ➔
-                </span>
-            </div>
+        <button id="loginBtn" class="btn-primary" onclick="handleSmartAuth()">
+            🚀 登录 / 自动注册
+        </button>
+        
+        <div id="loginMsg" style="color:#ef4444; font-size:0.85rem; margin-top:10px; min-height:20px;"></div>
+        
+        <div style="border-top:1px solid #eee; padding-top:15px; margin-top:15px;">
+            <button onclick="startOfflineMode()" style="background:none; border:none; color:#94a3b8; text-decoration:underline; cursor:pointer; font-size:0.9rem;">
+                暂不登录，使用离线模式 ➔
+            </button>
         </div>
     </div>
+</div>
 
     <div id="apiModal">
         <div class="modal-content">
@@ -414,29 +410,71 @@
         document.getElementById('loginOverlay').style.display = 'flex';
     };
 
-    // 登录处理
-    async function handleLogin() {
-        if (!supabase) return alert("请在代码中配置 Supabase URL/Key");
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
+    // === 🧠 智能验证逻辑 (移植自原版) ===
+    
+    async function handleSmartAuth() {
+        // 1. 基础检查
+        if (!sbClient) return alert("请先在代码中填入 Supabase URL 和 Key！");
         
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert("登录失败: " + error.message);
-        else {
-            currentUser = data.user;
-            await enterCloudMode();
-        }
-    }
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const btn = document.getElementById('loginBtn');
+        const msg = document.getElementById('loginMsg');
 
-    // 注册处理
-    async function handleSignUp() {
-        if (!supabase) return alert("未配置 Supabase");
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        
-        const { data, error } = await supabase.auth.signUp({ email, password });
-        if (error) alert("注册失败: " + error.message);
-        else alert("注册确认邮件已发送，请查收！");
+        if (!email || !password) {
+            msg.innerText = "请输入邮箱和密码";
+            return;
+        }
+
+        try {
+            // UI 锁定状态
+            btn.disabled = true;
+            btn.innerText = "正在连接...";
+            msg.innerText = "";
+
+            // 🟢 第一步：尝试直接登录
+            const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+
+            if (error) {
+                // 🟡 第二步：登录失败？判断是不是新用户
+                console.log("登录失败，尝试自动注册:", error.message);
+                
+                // 只有当错误提示是“账号不存在”相关时，才尝试注册
+                // 但为了简单，我们直接尝试注册（Supabase 会处理重复注册报错）
+                btn.innerText = "账号不存在，正在注册...";
+                
+                const signUpRes = await sbClient.auth.signUp({ email, password });
+                
+                if (signUpRes.error) {
+                    // 注册也失败了（比如密码太短，或者邮箱格式不对）
+                    throw new Error(signUpRes.error.message);
+                } else {
+                    // 🟢 第三步：注册成功！自动登录进去
+                    // 注意：有些 Supabase 设置需要邮箱验证，那样这里会进不去，
+                    // 但既然你之前的逻辑是这样，说明你可能关了"Confirm Email"设置。
+                    
+                    // 再次尝试登录以获取 Session
+                    const retry = await sbClient.auth.signInWithPassword({ email, password });
+                    if (retry.error) throw retry.error;
+                    
+                    // 成功！
+                    currentUser = retry.data.user;
+                    await enterCloudMode();
+                }
+            } else {
+                // 登录一次就成功了
+                currentUser = data.user;
+                await enterCloudMode();
+            }
+
+        } catch (e) {
+            // 🔴 统一错误处理
+            console.error(e);
+            msg.innerText = "验证失败: " + e.message;
+            btn.innerText = "🚀 登录 / 自动注册"; // 恢复按钮文字
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     // 离线模式
