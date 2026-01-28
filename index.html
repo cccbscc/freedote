@@ -2,823 +2,620 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Freedote</title>
-    <script src="https://cdn.staticfile.org/marked/9.1.2/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root { --primary-color: #2563eb; --bg-color: #f8fafc; --header-height: 50px;}
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; color: #333;}
-
-        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f5f9; z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .login-box { background: white; padding: 35px 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; }
-        .login-box h2 { margin-top: 0; color: #1e293b; font-size: 1.5rem; margin-bottom: 5px;}
-        .login-sub { color: #64748b; font-size: 0.9rem; margin-bottom: 25px; }
-
-        .mode-switch { display: flex; background: #e2e8f0; padding: 4px; border-radius: 8px; margin-bottom: 20px; }
-        .mode-btn { flex: 1; padding: 8px; border: none; background: transparent; cursor: pointer; border-radius: 6px; font-size: 0.9rem; color: #64748b; font-weight: 500;}
-        .mode-btn.active { background: white; color: var(--primary-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: bold;}
-
-        .input-group { text-align: left; margin-bottom: 15px; }
-        .login-box input { width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: border 0.2s; outline: none; background: #f8fafc;}
-        .login-box input:focus { border-color: var(--primary-color); background: white; }
-
-        .main-btn { width: 100%; padding: 14px; background: var(--primary-color); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; transition: transform 0.1s;}
-        .main-btn:active { transform: scale(0.98); }
-        .main-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-
-        .local-btn { background: #059669; } /* 绿色按钮 */
-
-        .msg { color: #ef4444; font-size: 0.85rem; margin-top: 15px; min-height: 20px;}
-
-        /* 主界面样式 */
-        .app-container { display: flex; flex-direction: column; height: 100%; filter: blur(0); transition: filter 0.3s;}
-        .app-container.blur { filter: blur(5px); }
-        .header { background: #fff; padding: 0 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; height: var(--header-height); flex-shrink: 0; z-index: 20;}
-        .header h1 { margin: 0; font-size: 1rem; color: #1e293b; font-weight: 700; display:flex; align-items:center; gap:5px;}
-        .user-info { font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 8px; }
-        .logout-link { color: #ef4444; cursor: pointer; }
-
-        .config-panel { position: absolute; top: 50px; right: 10px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; z-index: 100; display: none; width: 260px;}
-        .config-panel.show { display: block; }
-        .config-panel input { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px;}
-
-        .tab-bar { background: #e2e8f0; display: flex; align-items: flex-end; padding-left: 10px; gap: 4px; height: 40px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid #cbd5e1; scrollbar-width: none;}
-        .tab { padding: 10px 15px; background: #cbd5e1; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.85rem; color: #475569; white-space: nowrap; }
-        .tab.active { background: white; color: var(--primary-color); font-weight: bold; padding-top: 12px; margin-top: -2px; box-shadow: 0 -2px 4px rgba(0,0,0,0.05); }
-        .tab-close { margin-left: 5px; opacity: 0.6; font-size: 0.7rem; }
-        .add-tab-btn { padding: 10px 15px; font-weight: bold; color: #64748b; cursor: pointer; }
-
-        .main-body { display: flex; flex: 1; overflow: hidden; position: relative; transition: all 0.3s; background: white;}
-        .left-panel { width: 300px; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 15px; z-index: 10; background: #fff; }
-        .nav-panel { width: 220px; background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;}
-        .nav-item { padding: 10px 15px; cursor: pointer; color: #334155; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9;}
-        .nav-item:hover { background: #e2e8f0; }
-        .content-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0; position: relative;}
-        .markdown-scroll { flex: 1; overflow-y: auto; padding: 40px; }
-        .markdown-body { max-width: 800px; margin: 0 auto; line-height: 1.7; color: #333; }
-        .markdown-body blockquote { border-left: 4px solid var(--primary-color); margin: 10px 0; padding: 5px 15px; background: #f8fafc; color: #555; }
-
-        .view-toggle-btn { position: absolute; top: 15px; right: 20px; z-index: 50; background: white; border: 1px solid #cbd5e1; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; display: flex; gap:5px; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
-        .editor-container { display: none; padding-bottom: 50px; }
-        .editor-container.active { display: block; }
-        .edit-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
-        .edit-label { font-size: 0.8rem; color: #64748b; font-weight: bold; margin-bottom: 5px; display: block;}
-        .edit-textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; font-family: inherit; font-size: 14px; margin-bottom: 10px; resize: vertical;}
-        .edit-item-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
-        .edit-input { flex: 1; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px; font-size: 14px; }
-        .del-btn { color: #ef4444; cursor: pointer; padding: 8px; font-size: 1.1rem; line-height: 1; }
-        .add-item-btn { background: none; border: 1px dashed #cbd5e1; color: var(--primary-color); width: 100%; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-top: 5px;}
-        .save-float-btn { position: fixed; bottom: 30px; right: 30px; background: #059669; color: white; padding: 12px 25px; border-radius: 30px; border: none; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; font-size: 1rem; z-index: 100; display: none;}
-        .editor-container.active ~ .save-float-btn { display: block; }
-
-        textarea#userInput { width: 100%; height: 120px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; resize: none; margin-bottom: 10px; font-family: inherit; font-size: 14px;}
-        textarea#userInput:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
-        button.action-btn { border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; color: white; width: 100%; margin-bottom: 8px; font-size: 14px; background: var(--primary-color);}
-        button.action-btn:disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.7;}
-        .btn-outline { background: white; border: 1px solid #cbd5e1; color: #475569; width: 100%; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 5px;}
-        .status-box { margin-bottom: 5px; min-height: 20px; font-size: 0.8rem; color: var(--primary-color); font-weight: bold; }
-        .options-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; color: #475569; }
-        .backup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 5px; }
-
-        @media (max-width: 768px) {
-            .main-body { flex-direction: column; }
-            .left-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #e2e8f0; order: 1; padding: 10px;}
-            .left-panel.collapsed textarea#userInput, .left-panel.collapsed .btn-group, .left-panel.collapsed .options-row { display: none; }
-            .mobile-toggle { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #64748b; margin-bottom: 5px; font-size: 0.9rem;}
-            .nav-panel { width: 100%; height: 50px; flex-direction: row; border-right: none; border-bottom: 1px solid #e2e8f0; overflow-x: auto; overflow-y: hidden; order: 2; align-items: center; padding: 0 10px; white-space: nowrap;}
-            .nav-item { border-bottom: none; border-radius: 15px; background: #f1f5f9; margin-right: 8px; padding: 5px 12px; font-size: 0.8rem;}
-            .nav-item.active { background: var(--primary-color); color: white; }
-            .content-panel { order: 3; height: 100%; }
-            .markdown-scroll { padding: 15px; } 
-            .save-float-btn { bottom: 20px; right: 20px; padding: 10px 20px; font-size: 0.9rem;}
-        }
-        @media (min-width: 769px) { .mobile-toggle { display: none; } }
-        /* === 🔍 搜索功能样式 (开始) === */
-    /* 1. 电脑端侧边栏搜索框 */
-    .desktop-search-box { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1; display: none; }
-    .desktop-search-box input { width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; background: #f8fafc; outline: none; transition: 0.3s; }
-    .desktop-search-box input:focus { background: white; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-
-    /* 2. 手机端全屏弹窗 */
-    .search-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.6); z-index: 2000; display: none; align-items: flex-start; justify-content: center; padding-top: 80px; backdrop-filter: blur(4px); }
-    .search-panel { background: white; width: 90%; max-width: 500px; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; max-height: 60vh; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
-    .search-header { padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
-    .search-input-mobile { flex: 1; border: none; font-size: 16px; outline: none; height: 30px; }
-    .search-results { overflow-y: auto; padding: 0; }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freedote Pro - 生物工程笔记台</title>
     
-    /* 3. 搜索结果通用样式 */
-    .result-item { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.1s; }
-    .result-item:hover { background: #eff6ff; }
-    .result-title { font-size: 0.9rem; font-weight: bold; color: #334155; }
-    .result-match { font-size: 0.8rem; color: #64748b; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .highlight { color: var(--primary-color); font-weight: bold; background: #dbeafe; padding: 0 2px; border-radius: 2px; }
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
-    /* 4. 响应式控制：电脑显示侧边框，手机显示顶部钮 */
-    @media (min-width: 769px) { .desktop-search-box { display: block; } .mobile-only-btn { display: none; } }
-    @media (max-width: 768px) { .desktop-search-box { display: none; } .mobile-only-btn { display: block; } }
-    /* === 🔍 搜索功能样式 (结束) === */
+    <style>
+        /* === 🎨 现代 UI 设计系统 === */
+        :root {
+            --primary: #2563eb;       /* 核心蓝 */
+            --primary-hover: #1d4ed8;
+            --bg-body: #f1f5f9;       /* 页面背景 (Slate-100) */
+            --bg-card: #ffffff;       /* 卡片背景 */
+            --text-main: #334155;     /* 主要文字 (Slate-700) */
+            --text-sub: #64748b;      /* 次要文字 (Slate-500) */
+            --border: #e2e8f0;        /* 边框色 */
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius: 12px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden; /* 禁止整页滚动 */
+        }
+
+        /* === 布局：左右 50:50 分屏 === */
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 左面板：工作台 (Workbench) */
+        .panel-left {
+            flex: 1; /* 50% 宽度 */
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            background: #f8fafc;
+            min-width: 320px;
+        }
+
+        /* 右面板：档案柜 (Archive) */
+        .panel-right {
+            flex: 1; /* 50% 宽度 */
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background: white;
+            overflow-y: auto;
+            min-width: 320px;
+        }
+
+        /* === 组件：输入框卡片 === */
+        .input-card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        .input-card:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--text-main);
+            font-family: 'Consolas', monospace; /* 方便看对齐 */
+        }
+
+        /* === 组件：三路按钮组 === */
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .btn {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .btn:active { transform: scale(0.96); }
+        
+        /* 按钮风格 */
+        .btn-draft { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); flex: 1; }
+        .btn-draft:hover { background: #e2e8f0; }
+        
+        .btn-direct { background: #dbeafe; color: var(--primary); border: 1px solid #bfdbfe; flex: 1; }
+        .btn-direct:hover { background: #bfdbfe; }
+
+        .btn-organize { 
+            background: var(--primary); color: white; width: 100%; 
+            padding: 12px; margin-top: 10px;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+        }
+        .btn-organize:hover { background: var(--primary-hover); }
+
+        /* === 组件：草稿流 (Timeline) === */
+        .draft-stream {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px; /* 滚动条留白 */
+            margin-bottom: 10px;
+        }
+        
+        .draft-bubble {
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+            padding: 12px;
+            position: relative;
+            transition: transform 0.1s;
+        }
+        .draft-bubble:hover { border-color: #cbd5e1; }
+        
+        .draft-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .draft-content {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            color: var(--text-main);
+            max-height: 150px; /* 默认最大高度 */
+            overflow: hidden;
+            position: relative;
+        }
+        .draft-content.expanded { max-height: none; }
+        
+        /* 展开/折叠 提示 */
+        .expand-hint {
+            display: none;
+            font-size: 0.75rem; color: var(--primary); cursor: pointer; margin-top: 4px;
+        }
+
+        .draft-actions {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #f1f5f9;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .mini-btn { font-size: 0.75rem; color: #94a3b8; cursor: pointer; }
+        .mini-btn:hover { color: var(--primary); }
+        .mini-btn.del:hover { color: #ef4444; }
+
+        /* === 右侧：折叠面板 (Accordion) === */
+        .nav-toggle {
+            cursor: pointer; padding: 10px; background: #f8fafc; border-radius: 8px;
+            margin-bottom: 15px; font-weight: bold; color: var(--text-sub);
+            user-select: none;
+        }
+        .nav-content { display: none; padding: 10px; }
+        .nav-content.show { display: block; }
+        
+        .topic-card {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+        .topic-header {
+            display: flex; align-items: center; justify-content: space-between;
+            cursor: pointer; user-select: none;
+        }
+        .topic-title { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin: 0; }
+        .topic-arrow { transition: transform 0.2s; color: #cbd5e1; }
+        .topic-card.collapsed .topic-body { display: none; }
+        .topic-card.collapsed .topic-arrow { transform: rotate(-90deg); }
+
+        .topic-body { margin-top: 15px; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* API 弹窗 */
+        #apiModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; justify-content: center; align-items: center; }
+        .modal-box { background: white; padding: 25px; border-radius: 12px; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
 
-<div id="loginOverlay">
-    <div class="login-box">
-        <h2>🚀 Freedote 知识库</h2>
-        <div class="mode-switch">
-            <button class="mode-btn active" id="tabLocal" onclick="switchLoginMode('local')">🏠 离线使用</button>
-            <button class="mode-btn" id="tabCloud" onclick="switchLoginMode('cloud')">☁️ 云端同步</button>
-        </div>
-
-        <div id="localForm">
-            <div class="login-sub">数据保存在本地，无需联网。<br>AI 功能需填入 Key 即可使用。</div>
-            <button class="main-btn local-btn" onclick="enterLocalMode()">🚀 立即进入</button>
-        </div>
-
-        <div id="cloudForm" style="display:none;">
-            <div class="login-sub">需要账号密码登录。</div>
-            <div class="input-group">
-                <input type="text" id="email" placeholder="邮箱">
-            </div>
-            <div class="input-group">
-                <input type="password" id="password" placeholder="密码">
-            </div>
-            <button class="main-btn" id="loginBtn" onclick="handleLogin()">登录 / 注册</button>
-        </div>
-
-        <div class="msg" id="loginMsg"></div>
+<div id="apiModal">
+    <div class="modal-box">
+        <h3>🔑 设置 DeepSeek API</h3>
+        <p style="font-size:0.85rem; color:#666;">用于“整理草稿”功能</p>
+        <input type="password" id="apiKeyInput" placeholder="sk-..." style="width: 100%; padding: 10px; margin: 10px 0; border:1px solid #ddd; border-radius:6px;">
+        <button onclick="saveApiKey()" class="btn btn-organize">保存并开始</button>
     </div>
 </div>
 
-<div class="app-container blur" id="appContainer">
-    <div class="header">
-        <h1>📑 知识库 <span id="modeTag" style="font-size:0.7em; background:#eee; padding:2px 6px; border-radius:4px;">离线版</span></h1>
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div class="user-info"><span id="userEmail"></span><span class="logout-link" onclick="handleLogout()">退出</span></div>
-            <button class="config-btn mobile-only-btn" onclick="openSearch()">🔍</button>
-            <button class="config-btn" onclick="toggleConfig()">⚙️</button>
+<div class="split-container">
+    
+    <div class="panel-left">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-weight:bold; font-size:1.1rem;">🧪 实验台 / 草稿箱</span>
+            <span style="font-size:0.8rem; cursor:pointer;" onclick="document.getElementById('apiModal').style.display='flex'">⚙️ 设置</span>
         </div>
-        <div class="config-panel" id="configPanel">
-            <h4>设置</h4>
-            <input type="password" id="apiKey" placeholder="DeepSeek API Key (sk-...)" onchange="saveSettings()">
-            <input type="text" id="modelName" placeholder="deepseek-chat" value="deepseek-chat" onchange="saveSettings()">
-            <div id="syncOption" style="display:none">
-                <label style="font-size:0.85rem; display:block; margin-top:5px; color:#666;">
-                    <input type="checkbox" id="syncKey" onchange="saveSettings()"> ☁️ 同步 Key 到云端
-                </label>
+
+        <div class="input-card">
+            <textarea id="mainInput" placeholder="记录想法、数据、文献... (支持 CO2+空格 自动下标)"></textarea>
+            <div class="action-bar">
+                <button class="btn btn-draft" onclick="saveToDraft()">
+                    ⬇️ 扔进草稿箱
+                </button>
+                <button class="btn btn-direct" onclick="directSave()">
+                    📝 速记上屏
+                </button>
             </div>
         </div>
+
+        <div style="margin-bottom:5px; font-size:0.8rem; color:#94a3b8; display:flex; justify-content:space-between;">
+            <span>缓冲池 (<span id="draftCount">0</span>)</span>
+            <span style="cursor:pointer; color:#ef4444;" onclick="clearDrafts()">清空</span>
+        </div>
+        
+        <div id="draftStream" class="draft-stream">
+            </div>
+
+        <button id="organizeBtn" class="btn btn-organize" onclick="organizeAll()">
+            🧠 AI 一键整理归档
+        </button>
     </div>
 
-    <div class="tab-bar" id="tabBar"></div>
-
-    <div class="main-body">
-        <div class="left-panel" id="inputPanel">
-            <div class="mobile-toggle" onclick="document.getElementById('inputPanel').classList.toggle('collapsed')">
-                <span>⚡ 录入 / 指令</span><span>▼</span>
-            </div>
-            <div class="options-row">
-                <label style="cursor:pointer; display:flex; align-items:center;">
-                    <input type="checkbox" id="autoOrganize" checked style="margin-right:5px;"> ✨ AI 润色与整理
-                </label>
-            </div>
-            <textarea id="userInput" placeholder="输入内容... (支持 @分类 指令)"></textarea>
-            <div id="status" class="status-box"></div>
-            <div class="btn-group">
-                <button class="action-btn" onclick="processInput()">🚀 执行 (Auto)</button>
-                <div class="backup-grid">
-                    <button class="btn-outline" onclick="exportMarkdown()">📄 导出 MD</button>
-                    <button class="btn-outline" onclick="exportJSON()">⚙️ 导出 Data</button>
-                </div>
-                <button class="btn-outline" onclick="document.getElementById('fileInput').click()">📥 导入备份 (JSON)</button>
-                <input type="file" id="fileInput" style="display:none" onchange="importJSON(this)" accept=".json">
-                <button class="btn-outline" style="color:#ef4444; margin-top:5px;" onclick="clearCurrentTab()">🗑️ 清空</button>
-                <div class="desktop-search-box">
-    <input type="text" id="desktopSearchInput" placeholder="🔍 搜索笔记..." oninput="handleDesktopSearch(this.value)">
-</div>
+    <div class="panel-right">
+        <div style="margin-bottom:20px;">
+            <input type="text" id="searchInput" placeholder="🔍 搜索全局内容..." oninput="handleSearch(this.value)" 
+                   style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px;">
+            
+            <div class="nav-toggle" onclick="toggleNav()">
+                📑 目录索引 <span id="navArrow" style="float:right;">▼</span>
+                <div id="navList" class="nav-content"></div>
             </div>
         </div>
-        <div class="nav-panel" id="navList"></div>
-        <div class="content-panel">
-            <button class="view-toggle-btn" onclick="toggleEditMode()">
-                <span id="viewIcon">✏️</span> <span id="viewText">编辑模式</span>
-            </button>
-            <div class="markdown-scroll">
-                <div id="markdownOutput" class="markdown-body"></div>
-                <div id="editorOutput" class="editor-container"></div>
-                <button class="save-float-btn" onclick="saveEditor()">💾 保存修改</button>
+
+        <div id="contentArea">
+            <div style="text-align:center; color:#cbd5e1; margin-top:100px;">
+                知识库暂无内容<br>请在左侧添加笔记并整理
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // === 📖 预设说明书 (新用户默认显示) ===
-    const DEFAULT_NOTE_DATA = {
-      "tabs": [
-        { "id": "tab_guide", "name": "📘 使用手册" },
-        { "id": "tab_demo", "name": "🧪 实验记录(示例)" }
-      ],
-      "content_map": {
-        "tab_guide": {
-          "快速入门": {
-            "summary": "欢迎使用 Freedote！这是一个懂你的 AI 知识库。",
-            "sections": [
-              { "title": "如何记录？", "items": ["直接在左侧输入内容。", "例如：今天读了一篇关于 CRISPR 的文献，重点是..."] },
-              { "title": "魔法指令 (@)", "items": ["输入 @待办 买牛奶 -> 自动归类到[待办]", "输入 @灵感 突然想到的好点子 -> 自动归类到[灵感]"] },
-              { "title": "AI 整理", "items": ["勾选“AI 润色”，我会帮你提取摘要和排版。", "取消勾选，则为“速记模式”，速度更快。"] }
-            ]
-          },
-          "数据安全": {
-            "summary": "你的数据完全由你掌控。",
-            "sections": [
-              { "title": "存储位置", "items": ["离线模式：数据在你的浏览器缓存里。", "云端模式：数据在你的 Supabase 数据库里。"] },
-              { "title": "注意事项", "items": ["请定期点击左侧“导出 Data”进行备份。", "不要在公共电脑上留下你的 Key。"] }
-            ]
-          }
-        },
-        "tab_demo": {
-          "枯草芽孢杆菌": {
-            "summary": "关于 B. subtilis 的实验记录示例",
-            "sections": [
-              { "title": "实验数据", "items": ["OD600 = 0.8", "发酵时间：24h"] },
-              { "title": "异常分析", "items": ["产率偏低，可能是溶氧不足导致。"] }
-            ]
-          }
-        }
-      },
-      "settings": {}
+    // === 核心数据 ===
+    let appData = {
+        drafts: [],      // 草稿数组
+        kb: {}           // 知识库对象 { "Topic": { summary, sections:[] } }
     };
-
-    // ============================================
-    // ⚠️ Supabase 配置 (请在此处填入你的 Key)
-    const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; 
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; 
-    // ============================================
-
-    let sbClient = null;
-    try {
-        if(window.supabase && SUPABASE_URL.includes('http')) sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    } catch(e) { console.log("Supabase 未初始化"); }
-
-    let isLocalMode = false;
-    let currentUser = null;
-    let noteData = { tabs: [], content_map: {}, settings: {} }; 
-    let currentTabId = 'tab_guide';
-    let isEditMode = false;
 
     // === 初始化 ===
-    window.onload = async function() {
-        if(window.innerWidth < 768) document.getElementById('inputPanel').classList.add('collapsed');
-
-        if(localStorage.getItem('apiKey')) document.getElementById('apiKey').value = localStorage.getItem('apiKey');
-
-        if(sbClient) {
-            const { data: { session } } = await sbClient.auth.getSession();
-            if (session) {
-                switchLoginMode('cloud');
-                loginSuccess(session.user, false);
-                return;
-            }
+    window.onload = function() {
+        const saved = localStorage.getItem('freedote_v3_data');
+        if (saved) {
+            appData = JSON.parse(saved);
+            renderDrafts();
+            renderKB();
         }
-
-        if(localStorage.getItem('is_local_mode') === 'true') {
-            switchLoginMode('local');
-            enterLocalMode();
-        }
-    }
-
-    function switchLoginMode(mode) {
-        document.getElementById('tabLocal').className = mode==='local' ? 'mode-btn active' : 'mode-btn';
-        document.getElementById('tabCloud').className = mode==='cloud' ? 'mode-btn active' : 'mode-btn';
-        document.getElementById('localForm').style.display = mode==='local' ? 'block' : 'none';
-        document.getElementById('cloudForm').style.display = mode==='cloud' ? 'block' : 'none';
-    }
-
-    function enterLocalMode() {
-        isLocalMode = true;
-        currentUser = { id: 'local_user', email: 'Local@User' };
-        localStorage.setItem('is_local_mode', 'true');
-        document.getElementById('userEmail').innerText = "🏠 本地模式";
-        document.getElementById('modeTag').innerText = "离线版";
-        document.getElementById('syncOption').style.display = 'none';
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').classList.remove('blur');
-        loadData();
-    }
-
-    async function handleLogin() {
-        if(!sbClient) return alert("请先在代码中填入 Supabase URL 和 Key");
-        const btn = document.getElementById('loginBtn');
-        const msg = document.getElementById('loginMsg');
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        if(!email || !password) return msg.innerText = "请输入账号密码";
-        try {
-            btn.disabled = true; msg.innerText = "连接中...";
-            let { data, error } = await sbClient.auth.signInWithPassword({ email, password });
-            if (error) {
-                msg.innerText = "尝试注册...";
-                const res = await sbClient.auth.signUp({ email, password });
-                if (res.error) msg.innerText = res.error.message;
-                else {
-                    const loginRes = await sbClient.auth.signInWithPassword({ email, password });
-                    if(!loginRes.error) loginSuccess(loginRes.data.user, true);
-                }
-            } else {
-                loginSuccess(data.user, true);
-            }
-        } catch(e) { msg.innerText = "错误: " + e.message; } finally { btn.disabled = false; }
-    }
-
-    async function loginSuccess(user, isCloud) {
-        isLocalMode = false;
-        currentUser = user;
-        localStorage.removeItem('is_local_mode');
-        document.getElementById('userEmail').innerText = `☁️ ${user.email.split('@')[0]}`;
-        document.getElementById('modeTag').innerText = "云端版";
-        document.getElementById('syncOption').style.display = 'block';
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').classList.remove('blur');
-        await loadData();
-    }
-
-    async function handleLogout() {
-        if(!confirm("确定退出？")) return;
-        localStorage.removeItem('is_local_mode');
-        if(!isLocalMode && sbClient) await sbClient.auth.signOut();
-        location.reload();
-    }
-
-    // === 数据存取 (已集成说明书逻辑) ===
-    async function loadData() {
-        document.getElementById('status').innerText = "🔄";
-
-        if (isLocalMode) {
-            const localRaw = localStorage.getItem('freedote_data');
-            if (localRaw) {
-                noteData = JSON.parse(localRaw);
-            } else {
-                // 加载说明书
-                noteData = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
-            }
-        } else {
-            const { data } = await sbClient.from('notes').select('content').eq('user_id', currentUser.id).single();
-            if (data && data.content) {
-                noteData = data.content;
-                if(noteData.settings?.apiKey) {
-                    document.getElementById('apiKey').value = noteData.settings.apiKey;
-                    localStorage.setItem('apiKey', noteData.settings.apiKey);
-                }
-            } else {
-                // 加载说明书
-                noteData = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
-            }
-        }
-
-        if(!noteData.tabs || noteData.tabs.length===0) noteData.tabs = JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA)).tabs;
-        if(!noteData.tabs.find(t=>t.id===currentTabId)) currentTabId = noteData.tabs[0].id;
-
-        renderUI();
-        document.getElementById('status').innerText = "";
-    }
-
-    async function saveData() {
-        if (!currentUser) return;
-        if(!noteData.settings) noteData.settings = {};
-        if(!isLocalMode && document.getElementById('syncKey').checked) {
-             noteData.settings.apiKey = document.getElementById('apiKey').value;
-        }
-        if (isLocalMode) {
-            localStorage.setItem('freedote_data', JSON.stringify(noteData));
-        } else {
-            const { data } = await sbClient.from('notes').select('id').eq('user_id', currentUser.id).single();
-            if (data) await sbClient.from('notes').update({ content: noteData, updated_at: new Date() }).eq('user_id', currentUser.id);
-            else await sbClient.from('notes').insert({ user_id: currentUser.id, content: noteData });
-        }
-    }
-
-    function saveSettings() {
-        localStorage.setItem('apiKey', document.getElementById('apiKey').value);
-        localStorage.setItem('modelName', document.getElementById('modelName').value);
-        saveData();
-    }
-    function toggleConfig() { document.getElementById('configPanel').classList.toggle('show'); }
-
-    // === UI ===
-    function renderUI() {
-        const tabContainer = document.getElementById('tabBar');
-        tabContainer.innerHTML = '';
-        (noteData.tabs || []).forEach(tab => {
-            const div = document.createElement('div');
-            div.className = `tab ${tab.id === currentTabId ? 'active' : ''}`;
-            div.innerHTML = `<span onclick="switchTab('${tab.id}')" ondblclick="renameTab('${tab.id}')">${tab.name}</span><span class="tab-close" onclick="deleteTab('${tab.id}', event)">✕</span>`;
-            tabContainer.appendChild(div);
-        });
-        const add = document.createElement('div');
-        add.className = 'add-tab-btn'; add.innerText = '+'; add.onclick = addNewTab;
-        tabContainer.appendChild(add);
-        if(isEditMode) renderEditor(); else renderContent();
-    }
-    function switchTab(id) { currentTabId = id; isEditMode = false; updateViewModeUI(); renderUI(); }
-    function addNewTab() { const n = prompt("新分类:"); if(n) { noteData.tabs.push({id:'tab_'+Date.now(), name:n}); switchTab(noteData.tabs[noteData.tabs.length-1].id); saveData(); } }
-    function deleteTab(id, e) { e.stopPropagation(); if(noteData.tabs.length<=1)return alert("保留一个"); if(confirm("删除?")) { noteData.tabs=noteData.tabs.filter(t=>t.id!==id); delete noteData.content_map[id]; switchTab(noteData.tabs[0].id); saveData(); } }
-    function renameTab(id) { const t=noteData.tabs.find(x=>x.id===id); const n=prompt("重命名:",t.name); if(n){ t.name=n; renderUI(); saveData(); } }
-
-    function toggleEditMode() { isEditMode = !isEditMode; updateViewModeUI(); if(isEditMode) renderEditor(); else renderContent(); }
-    function updateViewModeUI() {
-        const btnText = document.getElementById('viewText'), btnIcon = document.getElementById('viewIcon');
-        const mdDiv = document.getElementById('markdownOutput'), edDiv = document.getElementById('editorOutput');
-        if(isEditMode) { btnText.innerText="退出编辑"; btnIcon.innerText="❌"; mdDiv.style.display='none'; edDiv.classList.add('active'); }
-        else { btnText.innerText="编辑模式"; btnIcon.innerText="✏️"; mdDiv.style.display='block'; edDiv.classList.remove('active'); }
-    }
-
-    function renderContent() {
-        const topics = noteData.content_map[currentTabId] || {};
-        const navDiv = document.getElementById('navList'), contentDiv = document.getElementById('markdownOutput');
-        let md = "", navHtml = "";
-        if(Object.keys(topics).length === 0) { contentDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">暂无内容</div>'; navDiv.innerHTML = ''; return; }
-        for(const [name, data] of Object.entries(topics)) {
-            navHtml += `<div class="nav-item" onclick="document.getElementById('t-${name}').scrollIntoView({behavior:'smooth'})">${name}</div>`;
-            md += `<h1 id="t-${name}">${name}</h1>\n\n`;
-            if(data.summary) md += `> ${data.summary}\n\n`;
-            if(data.sections && Array.isArray(data.sections)) {
-                data.sections.forEach(s => { md += `### ${s.title}\n`; if(s.items) s.items.forEach(i => md += `- ${i}\n`); md += `\n`; });
-            }
-            md += `---\n\n`;
-        }
-        navDiv.innerHTML = navHtml; contentDiv.innerHTML = marked.parse(md);
-    }
-
-function renderEditor() {
-        const topics = noteData.content_map[currentTabId] || {};
-        const editorDiv = document.getElementById('editorOutput');
-        let html = "";
+        if(!localStorage.getItem('deepseek_key')) document.getElementById('apiModal').style.display = 'flex';
         
-        if(Object.keys(topics).length === 0) { 
-            editorDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">暂无内容，请先在左侧输入</div>'; 
-            return; 
-        }
-
-        for(const [name, data] of Object.entries(topics)) {
-            // 👇 核心改动在这里：把 h2 换成了 input 和 button
-            html += `
-            <div class="edit-block">
-                <div style="display:flex; align-items:center; gap:10px; border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:10px;">
-                    <input type="text" class="edit-input topic-title-input" value="${name}" style="font-size:1.1rem; font-weight:bold; border:none; background:transparent; flex:1;" placeholder="主题名称">
-                    <button onclick="if(confirm('⚠️ 高能预警：\\n确定要删除【${name}】整个主题吗？\\n里面的所有笔记都会消失！')) this.closest('.edit-block').remove()" style="background:#fee2e2; color:#dc2626; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">🗑️ 删除整块</button>
-                </div>
-
-                <label class="edit-label">摘要 (Summary)</label>
-                <textarea class="edit-textarea summary-input">${data.summary||''}</textarea>
-                
-                <label class="edit-label">笔记详情 (Sections)</label>
-                <div>`;
-            
-            if(data.sections) {
-                data.sections.forEach(sec => {
-                    html += `
-                    <div class="section-block" style="background:white; border:1px solid #f1f5f9; padding:10px; border-radius:6px; margin-bottom:10px;">
-                        <input type="text" class="edit-input section-title-input" value="${sec.title}" style="font-weight:bold; margin-bottom:8px; color:#2563eb;" placeholder="小节标题">
-                        <div>`;
-                    if(sec.items) sec.items.forEach(item => {
-                        html += `<div class="edit-item-row"><input type="text" class="edit-input item-input" value="${item}"><span class="del-btn" onclick="this.parentElement.remove()">×</span></div>`;
-                    });
-                    html += `</div>
-                        <button class="add-item-btn" onclick="addEmptyItem(this)">+ 添加一条笔记</button>
-                    </div>`;
-                });
-            }
-            html += `</div></div>`;
-        }
-        editorDiv.innerHTML = html;
-    }
-    window.addEmptyItem = function(btn) { btn.previousElementSibling.insertAdjacentHTML('beforeend', `<div class="edit-item-row"><input type="text" class="edit-input item-input" placeholder="..."><span class="del-btn" onclick="this.parentElement.remove()">🗑️</span></div>`); }
-   window.saveEditor = async function() {
-        const topics = {};
-        // 遍历所有还在页面上的编辑块（如果你刚才点了删除，那个块就被移除了，自然不会被保存，也就实现了“删除”功能）
-        document.querySelectorAll('.edit-block').forEach(block => {
-            // 👇 获取新的大标题名字
-            const newTopicName = block.querySelector('.topic-title-input').value.trim();
-            if (!newTopicName) return; // 如果标题被删空了，就跳过不存
-
-            const summary = block.querySelector('.summary-input').value;
-            const sections = [];
-            
-            block.querySelectorAll('.section-block').forEach(sb => {
-                const secTitle = sb.querySelector('.section-title-input').value.trim();
-                const items = []; 
-                sb.querySelectorAll('.item-input').forEach(i => { 
-                    if(i.value.trim()) items.push(i.value.trim()); 
-                });
-                // 只有当小节有标题或者有内容时才保存
-                if (secTitle || items.length > 0) {
-                    sections.push({title: secTitle || "未命名小节", items});
-                }
-            });
-
-            // 以新名字作为 Key 存入对象（这就实现了“重命名”）
-            topics[newTopicName] = { summary, sections };
-        });
-
-        noteData.content_map[currentTabId] = topics; 
-        await saveData(); 
-        
-        // 保存完自动退出编辑模式并刷新
-        toggleEditMode(); 
-        alert("✅ 修改已保存！");
-    }
-
-    // === Tools ===
-    function exportMarkdown() {
-        const topics = noteData.content_map[currentTabId] || {}; const name = noteData.tabs.find(t=>t.id===currentTabId).name;
-        let md = `# ${name}\n\n`; for(const [k,v] of Object.entries(topics)) { md+=`# ${k}\n\n`; if(v.summary)md+=`> ${v.summary}\n\n`; if(v.sections) v.sections.forEach(s=>{ md+=`### ${s.title}\n`; if(s.items) s.items.forEach(i=>md+=`- ${i}\n`); }); md+=`---\n`; }
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md],{type:'text/markdown'})); a.download = `${name}_备份.md`; a.click();
-    }
-    function exportJSON() {
-        const jsonStr = JSON.stringify(noteData, null, 2);
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([jsonStr],{type:'application/json'})); a.download = `Full_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
-    }
-    function importJSON(input) {
-        const file = input.files[0]; if(!file) return;
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const parsed = JSON.parse(e.target.result);
-                if(!parsed.tabs || !parsed.content_map) throw new Error("格式错误");
-                if(confirm("导入将覆盖数据，确定？")) { noteData = parsed; if(!noteData.tabs.find(t=>t.id===currentTabId)) currentTabId = noteData.tabs[0].id; await saveData(); renderUI(); alert("导入成功"); }
-            } catch(err) { alert("导入失败: "+err.message); }
-            input.value = '';
-        }; reader.readAsText(file);
-    }
-    function clearCurrentTab() { if(confirm("清空?")) { noteData.content_map[currentTabId]={}; renderContent(); saveData(); } }
-
-    // === AI Logic ===
-    const TOOLS = {
-        create_tab: (args) => { const newId='tab_'+Date.now(); noteData.tabs.push({id:newId, name:args[0]}); return "已创建"; },
-        rename_tab: (args) => { const tab=noteData.tabs.find(t=>t.id===currentTabId); if(tab) tab.name=args[0]; return "已重命名"; },
-        delete_tab: (args) => { if(noteData.tabs.length<=1)return "最少保留一个"; noteData.tabs=noteData.tabs.filter(t=>t.id!==currentTabId); delete noteData.content_map[currentTabId]; switchTab(noteData.tabs[0].id); return "已删除"; },
-        delete_topic: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]) { delete t[args[0]]; return "已删除主题"; } return "未找到"; },
-        rename_topic: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]) { t[args[1]]=t[args[0]]; delete t[args[0]]; return "已重命名"; } return "未找到"; },
-        delete_section: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t&&t.sections) { t.sections=t.sections.filter(s=>!s.title.includes(args[1])); return "已删小节"; } return "未找到"; },
-        add_to_topic: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t) { if(!t.sections)t.sections=[]; let l=t.sections[t.sections.length-1]; if(l)l.items.push(args[1]); else t.sections.push({title:"新增",items:[args[1]]}); return "已追加"; } return "未找到"; },
-        clear_topic: (args) => { const t=noteData.content_map[currentTabId]?.[args[0]]; if(t){t.summary="";t.sections=[];return "已清空";} return "未找到"; },
-        move_topic: (args) => { const t=noteData.tabs.find(x=>x.name===args[1]); if(!t)return "目标不存在"; const src=noteData.content_map[currentTabId]; if(src&&src[args[0]]) { if(!noteData.content_map[t.id]) noteData.content_map[t.id]={}; noteData.content_map[t.id][args[0]]=src[args[0]]; delete src[args[0]]; return "已移动"; } return "主题不存在"; },
-        merge_topics: (args) => { const t=noteData.content_map[currentTabId]; if(t&&t[args[0]]&&t[args[1]]) { t[args[1]].summary += " "+t[args[0]].summary; t[args[1]].sections.push(...(t[args[0]].sections||[])); delete t[args[0]]; return "已合并"; } return "主题不存在"; }
+        // 绑定 Bio-Typing 监听器
+        setupBioTyping();
     };
 
-    async function processInput() {
-        let input = document.getElementById('userInput').value.trim();
-        if(!input) return;
-        const autoOrganize = document.getElementById('autoOrganize').checked;
-        const btn = document.querySelector('.action-btn');
-        const status = document.getElementById('status');
-        document.getElementById('userInput').value = ''; 
-        try {
-            btn.disabled = true; status.innerText = "🧠...";
-            const currentTopics = noteData.content_map[currentTabId] || {};
-            const topicList = Object.keys(currentTopics);
-            const currentTabName = noteData.tabs.find(t=>t.id===currentTabId).name;
-            const allTabNames = noteData.tabs.map(t=>t.name);
+    // === 1. 左侧：草稿箱逻辑 ===
 
-            let routerPrompt = "";
-            if (!autoOrganize) {
-                 routerPrompt = `
-你是一个专业的档案管理员。
-当前标签页: "${currentTabName}"
-已存在的主题列表: ${JSON.stringify(topicList)}
-用户输入: "${input}"
+    function saveToDraft() {
+        const input = document.getElementById('mainInput');
+        const text = input.value.trim();
+        if (!text) return;
 
-请执行以下逻辑并返回 JSON：
-1. 【优先归类】：判断用户输入是否属于“已存在的主题列表”中的某一项？如果是，直接复用该名称。
-2. 【智能新建】：如果不属于任何现有主题，请根据内容提炼一个精简的分类名称（2-6个字，例如"待办"、"Python"、"会议"）。
-3. 【禁止偷懒】：严禁返回"未分类"、"默认"、"其他"等无意义名称。必须根据内容概括。
-
-返回格式: {"type":"raw", "topic":"你的决策结果"}
-`;
-            } else {
-                 routerPrompt = `指令路由。当前页:"${currentTabName}" 所有页:${JSON.stringify(allTabNames)} 主题:${JSON.stringify(topicList)} 输入:"${input}"
-请返回JSON:
-1. 结构操作: {"type": "tool", "name": "函数名", "args": ["参1", "参2"]} (函数: create_tab, rename_tab, delete_tab, delete_topic, rename_topic, delete_section(topic, kw), add_to_topic(topic, txt), clear_topic, move_topic(topic, targetTab), merge_topics(src, target))
-2. 内容记录: {"type": "note", "topic": "主题名"}
-3. 内容重写: {"type": "rewrite", "topic": "主题名", "instruction": "要求"}`;
-            }
-
-            const res = await callLLM([{role: "user", content: routerPrompt}]);
-            const decision = JSON.parse(res);
-
-            if (decision.type === "tool") {
-                status.innerText = `⚡ ${decision.name}`;
-                const func = TOOLS[decision.name];
-                if(func) { const result = func(decision.args); await saveData(); renderUI(); status.innerText = `✅ ${result}`; } else status.innerText = "❌ 未知";
-            } 
-            else if (decision.type === "rewrite") {
-                status.innerText = `✍️ 重写...`;
-                const topicData = currentTopics[decision.topic];
-                if (!topicData) throw new Error("无主题");
-                const rewritePrompt = `重写数据。\n要求: ${decision.instruction}\n数据: ${JSON.stringify(topicData)}\n返回JSON: {"summary": "...", "sections": [...]}`;
-                const newContent = await callLLM([{role: "user", content: rewritePrompt}]);
-                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
-                noteData.content_map[currentTabId][decision.topic] = JSON.parse(newContent);
-                await saveData(); renderUI(); status.innerText = "✅";
-            }
-            else if (decision.type === "raw") {
-                const topic = decision.topic;
-                status.innerText = `✍️ 追加到 [${topic}]...`;
-                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
-                if(!noteData.content_map[currentTabId][topic]) noteData.content_map[currentTabId][topic] = {summary:"（自动新建）", sections:[]};
-                const tData = noteData.content_map[currentTabId][topic];
-                if(!tData.sections) tData.sections = [];
-                let lastSec = tData.sections[tData.sections.length-1];
-                if(!lastSec) tData.sections.push({title: "速记", items: [input]});
-                else lastSec.items.push(input);
-                await saveData(); renderUI(); status.innerText = "✅";
-            }
-            else {
-                const topic = decision.topic || "未分类";
-                status.innerText = `✍️ 写入...`;
-                const currentData = currentTopics[topic] || {};
-                const editPrompt = `合并知识。当前: ${JSON.stringify(currentData)}\n输入: "${input}"\n返回JSON: {"summary": "摘要", "sections": [{"title": "...", "items": ["..."]}]}`;
-                const newContent = await callLLM([{role: "user", content: editPrompt}]);
-                if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
-                noteData.content_map[currentTabId][topic] = JSON.parse(newContent);
-                await saveData(); renderUI(); status.innerText = "✅";
-            }
-            setTimeout(()=>status.innerText="", 2000);
-        } catch(e) { status.innerText = "❌ " + e.message; console.error(e); document.getElementById('userInput').value = input; } finally { btn.disabled = false; }
-    }
-
-    async function callLLM(messages) {
-        const apiKey = document.getElementById('apiKey').value;
-        const modelName = document.getElementById('modelName').value;
-        if (!apiKey) throw new Error("请设置 API Key");
-        const res = await fetch(`https://api.deepseek.com/chat/completions`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ model: modelName, messages: messages, response_format: { type: "json_object" }, temperature: 0.3 })
+        appData.drafts.unshift({
+            id: Date.now(),
+            text: text,
+            time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
-        return data.choices[0].message.content;
-    }
-    // === 🔍 搜索核心逻辑 (复制粘贴到这里) ===
-    
-    // 1. 通用搜索算法：给一个关键词，返回所有匹配结果
-    function performSearch(keyword) {
-        keyword = keyword.trim().toLowerCase();
-        if (!keyword) return [];
-        const matches = [];
-        (noteData.tabs || []).forEach(tab => {
-            const topics = noteData.content_map[tab.id] || {};
-            for (const [topicName, data] of Object.entries(topics)) {
-                // 搜标题
-                if (topicName.toLowerCase().includes(keyword)) 
-                    matches.push({ tabId: tab.id, tabName: tab.name, topic: topicName, text: "匹配标题", score: 10 });
-                // 搜摘要
-                if (data.summary && data.summary.toLowerCase().includes(keyword)) 
-                    matches.push({ tabId: tab.id, tabName: tab.name, topic: topicName, text: data.summary, score: 5 });
-                // 搜内容
-                if (data.sections) {
-                    data.sections.forEach(sec => {
-                        if (sec.items) sec.items.forEach(item => {
-                            if (item.toLowerCase().includes(keyword)) 
-                                matches.push({ tabId: tab.id, tabName: tab.name, topic: topicName, text: item, score: 1 });
-                        });
-                    });
-                }
-            }
-        });
-        return matches.sort((a, b) => b.score - a.score); // 按相关度排序
+        
+        saveData();
+        input.value = '';
+        input.focus();
+        renderDrafts();
     }
 
-    // 2. 电脑端逻辑：输入时把中间的目录变成搜索结果
-    function handleDesktopSearch(val) {
-        const navDiv = document.getElementById('navList');
-        if (!val.trim()) { renderContent(); return; } // 删空了就恢复原样
+    // 速记上屏 (跳过草稿，直接追加到 "速记/Daily Log" 主题)
+    function directSave() {
+        const input = document.getElementById('mainInput');
+        const text = input.value.trim();
+        if (!text) return;
 
-        const results = performSearch(val);
-        if (results.length === 0) { navDiv.innerHTML = '<div style="padding:20px; text-align:center; color:#ccc;">无结果 🍃</div>'; return; }
+        // 默认归类到 "📅 速记日志"
+        const targetTopic = "📅 速记日志";
+        if (!appData.kb[targetTopic]) {
+            appData.kb[targetTopic] = { summary: "未经 AI 整理的快速记录", sections: [] };
+        }
+        
+        // 添加到第一个 section
+        let section = appData.kb[targetTopic].sections[0];
+        if (!section) {
+            section = { title: "今日记录", items: [] };
+            appData.kb[targetTopic].sections.push(section);
+        }
+        section.items.push(text);
 
-        let html = `<div style="padding:8px; background:#f1f5f9; font-size:0.8rem; color:#666;">找到 ${results.length} 条结果</div>`;
-        results.forEach(m => {
-            const hlText = m.text.replace(new RegExp(`(${val})`, 'gi'), '<span class="highlight">$1</span>');
-            html += `<div class="result-item" onclick="jumpToResult('${m.tabId}', '${m.topic}')">
-                        <div class="result-title">${m.topic}</div>
-                        <div class="result-match">${hlText}</div>
-                        <div style="font-size:0.75rem; color:#cbd5e1; margin-top:2px;">来自: ${m.tabName}</div>
-                     </div>`;
-        });
-        navDiv.innerHTML = html;
-    }
-
-    // 3. 手机端逻辑：弹窗控制
-    function openSearch() { document.getElementById('searchModal').style.display = 'flex'; setTimeout(()=>document.getElementById('mobileSearchInput').focus(), 100); }
-    function closeSearch() { document.getElementById('searchModal').style.display = 'none'; document.getElementById('mobileSearchInput').value=''; }
-    
-    function handleMobileSearch(val) {
-        const div = document.getElementById('mobileSearchResults');
-        const results = performSearch(val);
-        if (results.length === 0) { div.innerHTML = '<div style="padding:20px; text-align:center; color:#ccc;">无结果</div>'; return; }
-        let html = '';
-        results.forEach(m => {
-            const hlText = m.text.replace(new RegExp(`(${val})`, 'gi'), '<span class="highlight">$1</span>');
-            html += `<div class="result-item" onclick="jumpToResult('${m.tabId}', '${m.topic}'); closeSearch();">
-                        <div class="result-title">${m.topic}</div>
-                        <div class="result-match">${hlText}</div>
-                     </div>`;
-        });
-        div.innerHTML = html;
-    }
-
-    // 4. 跳转逻辑：自动切 Tab 并滚动
-    function jumpToResult(tabId, topicName) {
-        if (currentTabId !== tabId) switchTab(tabId);
+        saveData();
+        input.value = '';
+        renderKB();
+        // 自动滚动到该 Topic
         setTimeout(() => {
-            const el = document.getElementById('t-' + topicName);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.style.background = '#fef3c7'; // 闪烁一下黄色背景提醒
-                setTimeout(() => el.style.background = 'transparent', 2000);
+            const el = document.getElementById(`topic-${targetTopic}`);
+            if(el) {
+                el.scrollIntoView({behavior: "smooth"});
+                el.classList.remove('collapsed'); // 自动展开
             }
         }, 100);
     }
-    // === ⚡ 生物/工科懒人输入法 ===
-    const inputArea = document.getElementById('userInput');
-    
-    // 监听输入，实时替换
-    inputArea.addEventListener('input', function(e) {
-        let val = this.value;
-        let cursor = this.selectionStart;
+
+    function renderDrafts() {
+        const container = document.getElementById('draftStream');
+        document.getElementById('draftCount').innerText = appData.drafts.length;
         
-        // 1. 基础符号替换 (输入 -> 变 →)
-        const replacements = {
-            '->': '→',
-            '=>': '⇒',
-            '!=': '≠',
-            '<=': '≤',
-            '>=': '≥',
-            '+-': '±',
-            '~=': '≈',
-            'degC': '°C',  // 摄氏度
-            'micro': 'μ',   // 微升的微
-            'alpha': 'α',
-            'beta': 'β',
-            'gamma': 'γ',
-            'delta': 'Δ'
-        };
-
-        // 2. 简单的化学式下标优化 (自动把 CO2 变成 CO₂)
-        // 逻辑：如果你输入了大写字母+数字(2-9)，大概率是化学式
-        // 注意：这个逻辑比较激进，如果你不喜欢可以把这段删掉
-        const chemPattern = /([A-Z][a-z]?)([2-9])\s$/; // 检测末尾是否是 "O2 " 或 "H2 " (加个空格触发)
-
-        let changed = false;
-
-        // 检查符号
-        for (const [key, char] of Object.entries(replacements)) {
-            if (val.endsWith(key, cursor)) { // 只有光标在末尾输入时才触发
-                // 把 key 替换成 char
-                const before = val.substring(0, cursor - key.length);
-                const after = val.substring(cursor);
-                this.value = before + char + after;
-                
-                // 修正光标位置
-                this.selectionStart = this.selectionEnd = cursor - key.length + 1;
-                changed = true;
-                break; 
-            }
+        if (appData.drafts.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#cbd5e1; padding:20px;">暂无草稿<br>随手记点什么吧...</div>';
+            return;
         }
 
-        // 检查化学式 (需要按一下空格触发，防止误伤)
-        // 比如输入 "CO2 " -> 自动变 "CO₂ "
-        if (!changed && val.slice(cursor-1, cursor) === ' ') {
-            // 获取光标前的内容
-            const textBefore = val.slice(0, cursor);
-            const match = textBefore.match(chemPattern);
-            if (match) {
-                const subMap = {'2':'₂', '3':'₃', '4':'₄', '5':'₅', '6':'₆', '7':'₇', '8':'₈', '9':'₉'};
-                const num = match[2];
-                const symbol = match[1];
-                
-                // 执行替换
-                const newText = textBefore.slice(0, -match[0].length) + symbol + subMap[num] + ' ';
-                this.value = newText + val.slice(cursor);
-                this.selectionStart = this.selectionEnd = newText.length;
-            }
+        let html = '';
+        appData.drafts.forEach((d, index) => {
+            const isLong = d.text.length > 100; // 超过100字算长文
+            html += `
+                <div class="draft-bubble">
+                    <div class="draft-meta">
+                        <span>🕒 ${d.time}</span>
+                        <span>#${index+1}</span>
+                    </div>
+                    <div class="draft-content ${isLong ? 'collapsed-text' : ''}" id="draft-txt-${d.id}">
+                        ${escapeHtml(d.text)}
+                    </div>
+                    ${isLong ? `<div class="expand-hint" onclick="toggleDraftExpand('${d.id}')">展开全文 ▼</div>` : ''}
+                    
+                    <div class="draft-actions">
+                        <span class="mini-btn" onclick="sendSingleDraft(${index})" title="直接存入文档">🚀 速记</span>
+                        <span class="mini-btn" onclick="copyDraft('${escapeHtml(d.text)}')" title="复制">📋</span>
+                        <span class="mini-btn del" onclick="deleteDraft(${index})">🗑️ 删除</span>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function deleteDraft(index) {
+        appData.drafts.splice(index, 1);
+        saveData();
+        renderDrafts();
+    }
+
+    function sendSingleDraft(index) {
+        const d = appData.drafts[index];
+        // 模拟写入输入框并调用 directSave
+        document.getElementById('mainInput').value = d.text;
+        directSave();
+        deleteDraft(index); // 移出草稿箱
+    }
+    
+    function toggleDraftExpand(id) {
+        const el = document.getElementById(`draft-txt-${id}`);
+        const hint = el.nextElementSibling;
+        if(el.style.maxHeight === 'none') {
+            el.style.maxHeight = '150px';
+            hint.innerText = '展开全文 ▼';
+        } else {
+            el.style.maxHeight = 'none';
+            hint.innerText = '收起 ▲';
         }
-    });
+    }
+    
+    function clearDrafts() {
+        if(confirm("确定清空所有草稿？")) {
+            appData.drafts = [];
+            saveData();
+            renderDrafts();
+        }
+    }
+
+    // === 2. 核心：AI 整理 ===
+    async function organizeAll() {
+        if (appData.drafts.length === 0) return alert("草稿箱是空的");
+        
+        const btn = document.getElementById('organizeBtn');
+        const originalText = btn.innerText;
+        btn.innerText = "⏳ AI 正在思考结构...";
+        btn.disabled = true;
+
+        const apiKey = localStorage.getItem('deepseek_key');
+        if(!apiKey) return alert("请先在右上角设置 API Key");
+
+        // 构造 Prompt
+        const draftText = appData.drafts.map(d => `[${d.time}] ${d.text}`).join("\n\n");
+        const currentKB = JSON.stringify(appData.kb);
+        
+        const prompt = `
+            我是你的科研笔记助手。请将以下【新草稿】整理归纳进【现有知识库】。
+            
+            【现有结构】: ${currentKB}
+            【新草稿】: 
+            ${draftText}
+            
+            【任务】:
+            1. 识别新草稿的主题，将其归类到现有的 Topic 中，或创建新 Topic。
+            2. 如果是实验数据，归类到实验记录；如果是文献，归类到文献阅读。
+            3. 请只返回合并后的最新 JSON 数据。不要 Markdown，不要废话。
+            4. JSON 格式: { "Topic名称": { "summary": "...", "sections": [{ "title": "...", "items": ["..."] }] } }
+        `;
+
+        try {
+            const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: "deepseek-chat",
+                    messages: [{"role": "user", "content": prompt}],
+                    temperature: 0.1
+                })
+            });
+
+            const data = await response.json();
+            const jsonStr = data.choices[0].message.content.replace(/```json|```/g, '').trim();
+            
+            appData.kb = JSON.parse(jsonStr);
+            appData.drafts = []; // 整理成功后清空草稿
+            
+            saveData();
+            renderKB();
+            renderDrafts();
+            
+            btn.innerText = "✅ 整理完成";
+            setTimeout(() => btn.innerText = originalText, 2000);
+
+        } catch (e) {
+            console.error(e);
+            alert("整理失败，请检查 API Key 或网络");
+            btn.innerText = originalText;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // === 3. 右侧：知识库渲染 (支持折叠) ===
+    function renderKB() {
+        const container = document.getElementById('contentArea');
+        const navList = document.getElementById('navList');
+        const kb = appData.kb;
+        
+        if (Object.keys(kb).length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#cbd5e1; margin-top:100px;">暂无数据</div>';
+            navList.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        let navHtml = '';
+
+        for (const [topic, data] of Object.entries(kb)) {
+            // 导航项
+            navHtml += `<div style="padding:4px; cursor:pointer;" onclick="scrollToTopic('${topic}')">📄 ${topic}</div>`;
+
+            // 内容块 (默认展开，点击标题折叠)
+            let sectionsHtml = '';
+            if (data.sections) {
+                data.sections.forEach(sec => {
+                    const itemsHtml = sec.items.map(i => `<li>${renderMarkdown(i)}</li>`).join('');
+                    sectionsHtml += `
+                        <div style="margin-bottom:15px;">
+                            <h4 style="margin:10px 0 5px; color:#475569;">${sec.title}</h4>
+                            <ul style="margin:0; padding-left:20px; color:#334155; line-height:1.6;">${itemsHtml}</ul>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                <div class="topic-card" id="topic-${topic}">
+                    <div class="topic-header" onclick="toggleTopic(this)">
+                        <div class="topic-title">${topic}</div>
+                        <div class="topic-arrow">▼</div>
+                    </div>
+                    <div class="topic-body">
+                        <blockquote style="background:#f1f5f9; padding:10px; border-left:4px solid var(--primary); margin:10px 0;">
+                            💡 ${data.summary || '无总结'}
+                        </blockquote>
+                        ${sectionsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+        navList.innerHTML = navHtml;
+        
+        // 渲染数学公式
+        renderMathInElement(container, { delimiters: [{left: '$', right: '$', display: false}] });
+    }
+
+    // 切换 Topic 折叠
+    function toggleTopic(headerEl) {
+        headerEl.parentElement.classList.toggle('collapsed');
+    }
+
+    // 切换导航折叠
+    function toggleNav() {
+        const nav = document.getElementById('navList');
+        const arrow = document.getElementById('navArrow');
+        nav.classList.toggle('show');
+        arrow.innerText = nav.classList.contains('show') ? '▲' : '▼';
+    }
+
+    function scrollToTopic(id) {
+        const el = document.getElementById(`topic-${id}`);
+        if(el) {
+            el.scrollIntoView({behavior: 'smooth'});
+            el.classList.remove('collapsed'); // 跳转时自动展开
+        }
+    }
+
+    // === 4. 工具函数 ===
+    
+    // Markdown + Bio 渲染
+    function renderMarkdown(text) {
+        let html = marked.parseInline(text);
+        // 渲染完再替换一下漏网的化学式 (可选)
+        html = html.replace(/CO2/g, 'CO₂').replace(/H2O/g, 'H₂O');
+        return html;
+    }
+
+    function saveData() {
+        localStorage.setItem('freedote_v3_data', JSON.stringify(appData));
+    }
+    
+    function saveApiKey() {
+        const key = document.getElementById('apiKeyInput').value;
+        if(key) { localStorage.setItem('deepseek_key', key); document.getElementById('apiModal').style.display = 'none'; }
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function copyDraft(text) {
+        navigator.clipboard.writeText(text);
+        alert('已复制');
+    }
+
+    // === 5. 生物输入法 (Bio-Typing) 监听器 ===
+    function setupBioTyping() {
+        const inputArea = document.getElementById('mainInput');
+        inputArea.addEventListener('input', function(e) {
+            const cursor = this.selectionStart;
+            const val = this.value;
+            
+            // 只有刚输入了 "空格" 才触发
+            if (e.data === ' ' || val.slice(cursor-1, cursor) === ' ') {
+                const textChunk = val.slice(Math.max(0, cursor-5), cursor);
+                // 正则：字母+数字+空格 (如 CO2 )
+                if (/[a-zA-Z][0-9]\s$/.test(textChunk)) {
+                    const numChar = textChunk.match(/[0-9]/)[0];
+                    const subMap = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+                    const before = val.slice(0, cursor-2);
+                    const newNum = subMap[numChar];
+                    const after = val.slice(cursor);
+                    this.value = before + newNum + " " + after;
+                    this.selectionStart = this.selectionEnd = cursor - 1; 
+                }
+            }
+            // 箭头 -> 变 →
+            if (val.slice(cursor-2, cursor) === '->') {
+                this.value = val.slice(0, cursor-2) + '→' + val.slice(cursor);
+                this.selectionStart = this.selectionEnd = cursor - 1;
+            }
+        });
+    }
 </script>
-    <div class="search-modal" id="searchModal" onclick="if(event.target===this) closeSearch()">
-    <div class="search-panel">
-        <div class="search-header">
-            <span>🔍</span>
-            <input type="text" class="search-input-mobile" id="mobileSearchInput" placeholder="输入关键词..." oninput="handleMobileSearch(this.value)">
-            <span style="font-size:1.2rem; color:#94a3b8; cursor:pointer;" onclick="closeSearch()">×</span>
-        </div>
-        <div class="search-results" id="mobileSearchResults">
-            <div style="padding:20px; text-align:center; color:#ccc;">输入内容开始搜索</div>
-        </div>
-    </div>
-</div>
+
 </body>
 </html>
