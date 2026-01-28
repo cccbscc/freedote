@@ -2,247 +2,211 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Freedote Pro (修复版)</title>
-    <script src="https://cdn.staticfile.org/marked/9.1.2/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freedote Pro (新版UI + 智能登录)</title>
     
+    <script src="https://cdn.staticfile.org/marked/9.1.2/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
-        /* === 样式表 (保持原版风格) === */
-        :root { --primary-color: #2563eb; --bg-color: #f8fafc; --header-height: 50px;}
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; color: #333;}
-
-        /* 登录遮罩 */
-        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f1f5f9; z-index: 9999; display: flex; align-items: center; justify-content: center; }
-        .login-box { background: white; padding: 35px 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; }
-        .login-box h2 { margin-top: 0; color: #1e293b; font-size: 1.5rem; margin-bottom: 5px;}
-        .login-sub { color: #64748b; font-size: 0.9rem; margin-bottom: 25px; }
-        .input-group { text-align: left; margin-bottom: 15px; }
-        .login-box input { width: 100%; padding: 12px 15px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: border 0.2s; outline: none; background: #f8fafc;}
-        .login-box input:focus { border-color: var(--primary-color); background: white; }
-        .main-btn { width: 100%; padding: 14px; background: var(--primary-color); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; }
-        .main-btn:disabled { background: #94a3b8; cursor: wait; }
-        .msg { color: #ef4444; font-size: 0.85rem; margin-top: 15px; min-height: 20px;}
-
-        /* 主界面 */
-        .app-container { display: flex; flex-direction: column; height: 100%; filter: blur(0); transition: filter 0.3s;}
-        .app-container.blur { filter: blur(5px); }
-        .header { background: #fff; padding: 0 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; height: var(--header-height); flex-shrink: 0; z-index: 20;}
-        .header h1 { margin: 0; font-size: 1rem; color: #1e293b; font-weight: 700; display:flex; align-items:center; gap:5px;}
-        .user-info { font-size: 0.8rem; color: #64748b; display: flex; align-items: center; gap: 8px; }
-        .logout-link { color: #ef4444; cursor: pointer; text-decoration: underline;}
-
-        /* 设置面板 */
-        .config-panel { position: absolute; top: 50px; right: 10px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; z-index: 100; display: none; width: 260px;}
-        .config-panel.show { display: block; }
-        .config-panel input { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px;}
-
-        /* 标签栏 */
-        .tab-bar { background: #e2e8f0; display: flex; align-items: flex-end; padding-left: 10px; gap: 4px; height: 40px; overflow-x: auto; flex-shrink: 0; border-bottom: 1px solid #cbd5e1; scrollbar-width: none;}
-        .tab { padding: 10px 15px; background: #cbd5e1; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.85rem; color: #475569; white-space: nowrap; }
-        .tab.active { background: white; color: var(--primary-color); font-weight: bold; padding-top: 12px; margin-top: -2px; box-shadow: 0 -2px 4px rgba(0,0,0,0.05); }
-        .tab-close { margin-left: 5px; opacity: 0.6; font-size: 0.7rem; }
-        .add-tab-btn { padding: 10px 15px; font-weight: bold; color: #64748b; cursor: pointer; }
-
-        /* 内容区 */
-        .main-body { display: flex; flex: 1; overflow: hidden; position: relative; transition: all 0.3s; background: white;}
-        
-        /* 左侧面板 */
-        .left-panel { width: 350px; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 15px; z-index: 10; background: #fff; transition: width 0.3s;}
-        .left-panel.collapsed { width: 40px; padding: 5px; }
-        
-        /* 导航栏 */
-        .nav-panel { width: 220px; background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;}
-        .nav-item { padding: 10px 15px; cursor: pointer; color: #334155; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9;}
-        .nav-item:hover { background: #e2e8f0; }
-
-        /* 右侧正文 */
-        .content-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0; position: relative;}
-        .markdown-scroll { flex: 1; overflow-y: auto; padding: 40px; }
-        .markdown-body { max-width: 800px; margin: 0 auto; line-height: 1.7; color: #333; }
-        .markdown-body h1 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .markdown-body blockquote { border-left: 4px solid var(--primary-color); margin: 10px 0; padding: 5px 15px; background: #f8fafc; color: #555; }
-
-        /* 输入控件 */
-        textarea#userInput { width: 100%; height: 120px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; resize: none; margin-bottom: 10px; font-family: inherit; font-size: 14px;}
-        textarea#userInput:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
-        button.action-btn { border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; color: white; width: 100%; margin-bottom: 8px; font-size: 14px; background: var(--primary-color);}
-        button.action-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-        .btn-outline { background: white; border: 1px solid #cbd5e1; color: #475569; width: 100%; padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-bottom: 5px; font-size: 0.85rem;}
-        .status-box { margin-bottom: 5px; min-height: 20px; font-size: 0.8rem; color: var(--primary-color); font-weight: bold; }
-
-        /* 响应式 */
-        @media (max-width: 768px) {
-            .main-body { flex-direction: column; }
-            .left-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #e2e8f0; order: 1; padding: 10px;}
-            .nav-panel { width: 100%; height: 50px; flex-direction: row; order: 2; overflow-x: auto; white-space: nowrap; align-items: center;}
-            .content-panel { order: 3; }
+        /* === 🎨 新版 UI 设计系统 (5:5分屏) === */
+        :root {
+            --primary: #2563eb;       --primary-hover: #1d4ed8;
+            --bg-body: #f8fafc;       --bg-panel: #f1f5f9;
+            --border: #e2e8f0;        --text-main: #334155;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
+        body { margin: 0; padding: 0; font-family: system-ui, sans-serif; background: var(--bg-body); color: var(--text-main); height: 100vh; overflow: hidden; }
+        * { box-sizing: border-box; }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        /* === 登录页 (保留你喜欢的旧版逻辑) === */
+        #loginOverlay {
+            position: fixed; inset: 0; background: rgba(248, 250, 252, 0.95); z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-card {
+            background: white; width: 360px; padding: 40px; border-radius: 16px; 
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); border: 1px solid var(--border); text-align: center;
+        }
+        .form-input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem; }
+        .btn-primary:disabled { background: #94a3b8; cursor: wait; }
+
+        /* === 主界面 (新版左右分屏) === */
+        .split-view { display: flex; width: 100%; height: 100%; opacity: 0; transition: opacity 0.3s; }
+        
+        /* 左侧：工作台 */
+        .panel-left { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); border-right: 1px solid var(--border); padding: 20px; min-width: 350px; }
+        
+        /* 右侧：档案柜 */
+        .panel-right { flex: 1; display: flex; flex-direction: column; background: white; padding: 20px; min-width: 350px; overflow: hidden; }
+
+        /* 输入框组件 */
+        .input-box { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 15px; box-shadow: var(--shadow); margin-bottom: 15px; transition: border 0.2s; }
+        .input-box:focus-within { border-color: var(--primary); }
+        textarea { width: 100%; height: 100px; border: none; outline: none; resize: none; font-family: 'Consolas', monospace; font-size: 1rem; }
+        
+        /* 按钮组 */
+        .btn-row { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-secondary { flex: 1; background: #f1f5f9; color: #475569; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-accent { flex: 1; background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        
+        /* 草稿气泡 */
+        .draft-bubble { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; position: relative; transition: transform 0.1s; }
+        .draft-bubble:hover { border-color: #94a3b8; }
+        .draft-meta { font-size: 0.75rem; color: #94a3b8; display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .draft-text { font-size: 0.95rem; white-space: pre-wrap; word-break: break-all; }
+        
+        /* 知识库卡片 */
+        .topic-card { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 15px; overflow: hidden; }
+        .topic-header { padding: 15px; background: #fff; display: flex; justify-content: space-between; cursor: pointer; font-weight: bold; border-bottom: 1px solid transparent; }
+        .topic-header:hover { background: #f8fafc; }
+        .topic-body { padding: 15px; border-top: 1px solid #f1f5f9; display: block; }
+        .topic-card.collapsed .topic-header { border-bottom: none; }
+        .topic-card.collapsed .topic-body { display: none; }
+
+        /* API 设置弹窗 */
+        #apiModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
 
-<div id="loginOverlay">
-    <div class="login-box">
-        <h2>Freedote Pro</h2>
-        <div class="login-sub">生物工程研究生专用 · 智能云笔记</div>
-
-        <div class="input-group">
-            <input type="email" id="email" placeholder="邮箱 (name@example.com)">
-        </div>
-        <div class="input-group">
-            <input type="password" id="password" placeholder="密码 (至少6位)">
-        </div>
-        
-        <button class="main-btn" id="smartLoginBtn" onclick="handleSmartAuth()">🚀 登录 / 自动注册</button>
-        
-        <div class="msg" id="loginMsg"></div>
-        
-        <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
-            <span style="color:#64748b; cursor:pointer; font-size:0.9rem; text-decoration:underline;" onclick="startOfflineMode()">
-                暂不登录，使用离线模式 ➔
-            </span>
-        </div>
-    </div>
-</div>
-
-<div class="app-container blur" id="appContainer">
-    <div class="header">
-        <h1>📑 知识库 <span id="modeTag" style="font-size:0.7em; background:#eee; padding:2px 6px; border-radius:4px; margin-left:5px;">离线版</span></h1>
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div class="user-info"><span id="userEmail"></span><span class="logout-link" onclick="handleLogout()">[退出]</span></div>
-            <button class="btn-outline" style="width:auto; margin:0;" onclick="toggleConfig()">⚙️ 设置</button>
-        </div>
-        <div class="config-panel" id="configPanel">
-            <h4>API 设置</h4>
-            <input type="password" id="apiKey" placeholder="DeepSeek API Key (sk-...)" onchange="saveSettings()">
-            <input type="text" id="modelName" placeholder="deepseek-chat" value="deepseek-chat" onchange="saveSettings()">
-            <label style="font-size:0.85rem; display:block; margin-top:5px; color:#666;">
-                <input type="checkbox" id="syncKey" onchange="saveSettings()"> ☁️ 同步 Key 到云端
-            </label>
-        </div>
-    </div>
-
-    <div class="tab-bar" id="tabBar"></div>
-
-    <div class="main-body">
-        <div class="left-panel" id="inputPanel">
-            <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-weight:bold; color:#475569;">
-                <span>⚡ 实验台</span>
-                <label style="font-size:0.8rem; font-weight:normal; display:flex; align-items:center;">
-                    <input type="checkbox" id="autoOrganize" checked style="margin-right:5px;"> AI 整理
-                </label>
-            </div>
+    <div id="loginOverlay">
+        <div class="login-card">
+            <h2 style="margin-top:0; color:#334155;">Freedote Pro</h2>
+            <p style="color:#64748b; font-size:0.9rem; margin-bottom:20px;">生物工程笔记台 (新版UI)</p>
             
-            <textarea id="userInput" placeholder="输入内容... (支持 CO2+空格 自动下标，输入 @分类 可自动归档)"></textarea>
-            <div id="status" class="status-box"></div>
-            
-            <button class="action-btn" onclick="processInput()">🚀 执行处理</button>
-            
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                <button class="btn-outline" onclick="exportMarkdown()">📄 导出 MD</button>
-                <button class="btn-outline" onclick="exportJSON()">⚙️ 导出 JSON</button>
-            </div>
-            <button class="btn-outline" style="color:#ef4444; margin-top:5px;" onclick="clearCurrentTab()">🗑️ 清空当前分类</button>
-        </div>
+            <input type="email" id="email" class="form-input" placeholder="邮箱 (name@example.com)">
+            <input type="password" id="password" class="form-input" placeholder="密码 (至少6位)">
 
-        <div class="nav-panel" id="navList"></div>
-
-        <div class="content-panel">
-            <div class="markdown-scroll">
-                <div id="markdownOutput" class="markdown-body"></div>
+            <button class="btn-primary" id="loginBtn" onclick="handleSmartAuth()">🚀 登录 / 自动注册</button>
+            
+            <div id="loginMsg" style="color:#ef4444; margin-top:10px; font-size:0.9rem; min-height:20px;"></div>
+            
+            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+                <button onclick="startOfflineMode()" style="background:none; border:none; color:#94a3b8; text-decoration:underline; cursor:pointer;">
+                    跳过登录，使用离线模式 ➔
+                </button>
             </div>
         </div>
     </div>
-</div>
+
+    <div id="apiModal">
+        <div style="background:white; padding:25px; border-radius:12px; width:300px;">
+            <h3>⚙️ DeepSeek API</h3>
+            <input type="password" id="apiKeyInput" class="form-input" placeholder="sk-..." style="margin-bottom:10px;">
+            <button class="btn-primary" onclick="saveApiKey()">保存</button>
+            <button onclick="document.getElementById('apiModal').style.display='none'" style="margin-top:10px; background:none; border:none; cursor:pointer; width:100%; color:#666;">取消</button>
+        </div>
+    </div>
+
+    <div class="split-view" id="mainApp">
+        <div class="panel-left">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
+                <strong style="font-size:1.1rem;">🧪 实验台</strong>
+                <span onclick="openApiSettings()" style="cursor:pointer; color:#64748b; font-size:0.9rem;">⚙️ 设置</span>
+            </div>
+
+            <div class="input-box">
+                <textarea id="mainInput" placeholder="在此速记... (支持 CO2+空格 自动下标)"></textarea>
+                <div class="btn-row">
+                    <button class="btn-secondary" onclick="saveToDraft()">⬇️ 存草稿</button>
+                    <button class="btn-accent" onclick="directSave()">📝 速记上屏</button>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#94a3b8; margin-bottom:5px;">
+                <span>缓冲池 (<span id="draftCount">0</span>)</span>
+                <span onclick="clearAllDrafts()" style="cursor:pointer; color:#ef4444;">清空</span>
+            </div>
+
+            <div id="draftStream" style="flex:1; overflow-y:auto; padding-right:5px;">
+                </div>
+
+            <button id="organizeBtn" class="btn-primary" style="margin-top:10px;" onclick="organizeAll()">🧠 AI 一键整理</button>
+            
+            <div style="margin-top:10px; font-size:0.8rem; color:#94a3b8; display:flex; justify-content:space-between;">
+                <span id="userStatus">未连接</span>
+                <span onclick="handleLogout()" style="cursor:pointer; text-decoration:underline;">退出</span>
+            </div>
+        </div>
+
+        <div class="panel-right">
+            <div style="margin-bottom:15px;">
+                <input type="text" class="form-input" style="margin-bottom:0; border-radius:8px;" placeholder="🔍 全局搜索 (支持高亮)..." oninput="renderKB(this.value)">
+            </div>
+            <div id="kbContent" style="flex:1; overflow-y:auto;">
+                </div>
+        </div>
+    </div>
 
 <script>
-    // ============================================
-    // ⚠️ Supabase 配置 (直接使用你提供的 Key)
-    // ============================================
+    // ================= 配置区 =================
+    // ⚠️ 你的 Key 已填好
     const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; 
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; 
-    // ============================================
 
-    // === 核心变量 (sbClient 防止冲突) ===
-    let sbClient = null;
-    let isLocalMode = false;
+    // 全局变量 (sbClient 防止冲突)
+    let sbClient = null; 
+    let appData = { drafts: [], kb: {} };
     let currentUser = null;
-    let noteData = { tabs: [], content_map: {}, settings: {} }; 
-    let currentTabId = 'tab_guide';
+    let isOffline = false;
 
-    // 默认数据
-    const DEFAULT_NOTE_DATA = {
-      "tabs": [
-        { "id": "tab_guide", "name": "📘 使用手册" }
-      ],
-      "content_map": {
-        "tab_guide": {
-          "快速入门": {
-            "summary": "欢迎回来！",
-            "sections": [
-              { "title": "如何使用？", "items": ["左侧输入内容，点击执行。", "支持 CO2 自动下标。"] }
-            ]
-          }
+    // ================= 初始化 =================
+    window.onload = async function() {
+        setupBioTyping();
+
+        try {
+            // 初始化客户端
+            if (typeof supabase !== 'undefined' && SUPABASE_URL.startsWith('http')) {
+                sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                
+                // 检查 Session (自动登录)
+                const { data: { session } } = await sbClient.auth.getSession();
+                if (session) {
+                    currentUser = session.user;
+                    await enterCloudMode();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error(e);
         }
-      },
-      "settings": {}
+
+        // 显示登录页
+        document.getElementById('loginOverlay').style.display = 'flex';
     };
 
-    // === 1. 初始化逻辑 ===
-    window.onload = async function() {
-        // 恢复 Key
-        if(localStorage.getItem('apiKey')) document.getElementById('apiKey').value = localStorage.getItem('apiKey');
-
-        // 初始化 Supabase
-        try {
-            // 只要 window.supabase 存在，就创建客户端
-            if (typeof supabase !== 'undefined') {
-                sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            }
-        } catch(e) { console.error("Supabase Init Error:", e); }
-
-        // 检查自动登录
-        if (sbClient) {
-            const { data: { session } } = await sbClient.auth.getSession();
-            if (session) {
-                loginSuccess(session.user);
-                return;
-            }
-        }
-
-        // 检查离线模式
-        if (localStorage.getItem('is_local_mode') === 'true') {
-            startOfflineMode();
-        }
-    }
-
-    // === 2. 智能登录/注册逻辑 (修复版) ===
+    // ================= 智能登录逻辑 (修复版) =================
     async function handleSmartAuth() {
-        if (!sbClient) return alert("Supabase 未初始化，请检查网络");
+        if (!sbClient) return alert("网络未连接，请检查代码配置");
         
-        const btn = document.getElementById('smartLoginBtn');
-        const msg = document.getElementById('loginMsg');
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value.trim();
+        const btn = document.getElementById('loginBtn');
+        const msg = document.getElementById('loginMsg');
 
-        if (!email || !password) {
-            msg.innerText = "请输入账号和密码";
-            return;
-        }
+        if (!email || !password) return msg.innerText = "请输入账号和密码";
 
         try {
-            btn.disabled = true; 
+            btn.disabled = true;
             btn.innerText = "连接中...";
             msg.innerText = "";
 
-            // 1. 尝试登录
+            // 1. 尝试直接登录
             const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
 
             if (error) {
                 // 2. 登录失败 -> 尝试注册
-                console.log("登录失败，尝试注册:", error.message);
+                console.log("登录失败，尝试自动注册:", error.message);
                 msg.innerText = "账号不存在，正在自动注册...";
                 
                 const regRes = await sbClient.auth.signUp({ email, password });
@@ -254,308 +218,239 @@
                     // 3. 注册成功 -> 自动登录
                     const loginRetry = await sbClient.auth.signInWithPassword({ email, password });
                     if (!loginRetry.error) {
-                        loginSuccess(loginRetry.data.user);
+                        currentUser = loginRetry.data.user;
+                        await enterCloudMode();
                     } else {
                         msg.innerText = "注册成功，请重新点击登录";
                         btn.innerText = "🚀 登录 / 自动注册";
                     }
                 }
             } else {
-                loginSuccess(data.user);
+                // 登录成功
+                currentUser = data.user;
+                await enterCloudMode();
             }
-        } catch(e) { 
-            msg.innerText = "错误: " + e.message; 
+        } catch (e) {
+            msg.innerText = "错误: " + e.message;
             btn.innerText = "🚀 登录 / 自动注册";
-        } finally { 
-            btn.disabled = false; 
+        } finally {
+            if(!currentUser) btn.disabled = false;
         }
-    }
-
-    async function loginSuccess(user) {
-        isLocalMode = false;
-        currentUser = user;
-        localStorage.removeItem('is_local_mode');
-        
-        document.getElementById('userEmail').innerText = `☁️ ${user.email}`;
-        document.getElementById('modeTag').innerText = "云端版";
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').classList.remove('blur');
-        
-        await loadData();
     }
 
     function startOfflineMode() {
-        isLocalMode = true;
-        currentUser = { id: 'local_user', email: 'Local' };
-        localStorage.setItem('is_local_mode', 'true');
+        isOffline = true;
+        const local = localStorage.getItem('freedote_local');
+        if (local) appData = JSON.parse(local);
         
-        document.getElementById('userEmail').innerText = "🏠 本地模式";
-        document.getElementById('modeTag').innerText = "离线版";
         document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').classList.remove('blur');
-        
-        loadData();
+        document.getElementById('mainApp').style.opacity = '1';
+        document.getElementById('userStatus').innerText = "离线模式";
+        renderAll();
+    }
+
+    async function enterCloudMode() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('mainApp').style.opacity = '1';
+        document.getElementById('userStatus').innerText = "☁️ " + currentUser.email;
+
+        // 拉取数据
+        try {
+            const { data, error } = await sbClient
+                .from('notes')
+                .select('content')
+                .eq('user_id', currentUser.id)
+                .single();
+
+            if (data && data.content) {
+                appData = data.content;
+                // 数据补全
+                if (!appData.drafts) appData.drafts = [];
+                if (!appData.kb) appData.kb = {};
+            }
+        } catch (e) { console.error(e); }
+        renderAll();
     }
 
     async function handleLogout() {
-        if(!confirm("确定退出？")) return;
-        localStorage.removeItem('is_local_mode');
-        if(!isLocalMode && sbClient) await sbClient.auth.signOut();
+        if (sbClient) await sbClient.auth.signOut();
         location.reload();
     }
 
-    // === 3. 数据存取 ===
-    async function loadData() {
-        document.getElementById('status').innerText = "🔄";
-        try {
-            if (isLocalMode) {
-                const localRaw = localStorage.getItem('freedote_data');
-                noteData = localRaw ? JSON.parse(localRaw) : JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
-            } else {
-                const { data } = await sbClient.from('notes').select('content').eq('user_id', currentUser.id).single();
-                noteData = (data && data.content) ? data.content : JSON.parse(JSON.stringify(DEFAULT_NOTE_DATA));
-            }
-        } catch(e) { console.error(e); }
-
-        // 数据结构修复
-        if(!noteData.tabs || noteData.tabs.length===0) noteData.tabs = [...DEFAULT_NOTE_DATA.tabs];
-        if(!noteData.content_map) noteData.content_map = {};
-        if(!noteData.tabs.find(t=>t.id===currentTabId)) currentTabId = noteData.tabs[0].id;
-
-        // 恢复云端 Key
-        if(noteData.settings?.apiKey) {
-            document.getElementById('apiKey').value = noteData.settings.apiKey;
-            localStorage.setItem('apiKey', noteData.settings.apiKey);
-        }
-
-        renderUI();
-        document.getElementById('status').innerText = "";
-    }
-
-    async function saveData() {
-        if (!currentUser) return;
+    // ================= 数据保存 =================
+    let saveTimer = null;
+    function saveData() {
+        // 本地备份
+        localStorage.setItem('freedote_local', JSON.stringify(appData));
         
-        // 保存 Key 配置
-        if(!noteData.settings) noteData.settings = {};
-        if(!isLocalMode && document.getElementById('syncKey').checked) {
-             noteData.settings.apiKey = document.getElementById('apiKey').value;
-        }
-
-        if (isLocalMode) {
-            localStorage.setItem('freedote_data', JSON.stringify(noteData));
-        } else {
-            const { data } = await sbClient.from('notes').select('id').eq('user_id', currentUser.id).single();
-            if (data) {
-                await sbClient.from('notes').update({ content: noteData, updated_at: new Date() }).eq('user_id', currentUser.id);
-            } else {
-                await sbClient.from('notes').insert({ user_id: currentUser.id, content: noteData });
-            }
+        // 云端同步
+        if (!isOffline && currentUser && sbClient) {
+            document.getElementById('userStatus').innerText = "🔄 同步中...";
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(async () => {
+                const { error } = await sbClient
+                    .from('notes')
+                    .upsert({ user_id: currentUser.id, content: appData }, { onConflict: 'user_id' });
+                
+                if (error) document.getElementById('userStatus').innerText = "❌ 同步失败";
+                else document.getElementById('userStatus').innerText = "☁️ " + currentUser.email;
+            }, 2000);
         }
     }
 
-    function saveSettings() {
-        localStorage.setItem('apiKey', document.getElementById('apiKey').value);
-        localStorage.setItem('modelName', document.getElementById('modelName').value);
+    // ================= 核心业务 (草稿 & KB) =================
+    function renderAll() {
+        renderDrafts();
+        renderKB();
+    }
+
+    // 草稿箱逻辑
+    function saveToDraft() {
+        const val = document.getElementById('mainInput').value.trim();
+        if(!val) return;
+        appData.drafts.unshift({ id: Date.now(), text: val, time: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}) });
         saveData();
+        document.getElementById('mainInput').value = '';
+        renderDrafts();
     }
 
-    // === 4. AI 处理逻辑 (全功能保留) ===
-    async function processInput() {
-        let input = document.getElementById('userInput').value.trim();
-        if(!input) return;
-        
-        const autoOrganize = document.getElementById('autoOrganize').checked;
-        const btn = document.querySelector('.action-btn');
-        const status = document.getElementById('status');
-        
-        try {
-            btn.disabled = true; status.innerText = "🧠 AI 处理中...";
-            
-            // 简单指令
-            if(input.startsWith("@")) {
-                const match = input.match(/^@(\S+)\s+(.*)/);
-                if(match) {
-                    const topic = match[1];
-                    const content = match[2];
-                    addToTopic(topic, content);
-                    finishProcess();
-                    return;
-                }
-            }
-
-            if (!autoOrganize) {
-                // 不开启 AI，直接存入“速记”
-                addToTopic("速记", input);
-                finishProcess();
-                return;
-            }
-
-            // 开启 AI：调用 LLM
-            const apiKey = document.getElementById('apiKey').value;
-            if(!apiKey) throw new Error("请先设置 API Key");
-
-            const currentTabName = noteData.tabs.find(t=>t.id===currentTabId).name;
-            const currentTopics = noteData.content_map[currentTabId] || {};
-            
-            const prompt = `
-            你是一个笔记整理助手。当前分类: "${currentTabName}"
-            已有主题: ${JSON.stringify(Object.keys(currentTopics))}
-            输入内容: "${input}"
-            
-            请返回 JSON: {"topic": "主题名", "summary": "摘要", "sections": [{"title": "小节", "items": ["内容"]}]}
-            如果是新主题，请起一个简短的名字。如果是已有主题，请合并。
-            `;
-
-            const res = await fetch(`https://api.deepseek.com/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model: document.getElementById('modelName').value || "deepseek-chat",
-                    messages: [{role: "user", content: prompt}],
-                    response_format: { type: "json_object" }
-                })
-            });
-            
-            const data = await res.json();
-            if(data.error) throw new Error(data.error.message);
-            
-            const result = JSON.parse(data.choices[0].message.content);
-            const topic = result.topic || "未分类";
-            
-            if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
-            noteData.content_map[currentTabId][topic] = result;
-            
-            finishProcess();
-
-        } catch(e) {
-            console.error(e);
-            status.innerText = "❌ " + e.message;
-            alert("执行失败: " + e.message);
-        } finally {
-            btn.disabled = false;
-        }
-
-        function finishProcess() {
-            saveData();
-            renderUI();
-            document.getElementById('userInput').value = '';
-            status.innerText = "✅ 完成";
-            setTimeout(()=>status.innerText="", 2000);
-        }
-    }
-
-    function addToTopic(topic, content) {
-        if(!noteData.content_map[currentTabId]) noteData.content_map[currentTabId] = {};
-        if(!noteData.content_map[currentTabId][topic]) {
-            noteData.content_map[currentTabId][topic] = { summary: "速记", sections: [] };
-        }
-        const tData = noteData.content_map[currentTabId][topic];
-        if(!tData.sections) tData.sections = [];
-        let lastSec = tData.sections[tData.sections.length-1];
-        if(!lastSec) tData.sections.push({title: "记录", items: [content]});
-        else lastSec.items.push(content);
-    }
-
-    // === 5. UI 渲染 ===
-    function renderUI() {
-        const tabContainer = document.getElementById('tabBar');
-        tabContainer.innerHTML = '';
-        (noteData.tabs || []).forEach(tab => {
-            const div = document.createElement('div');
-            div.className = `tab ${tab.id === currentTabId ? 'active' : ''}`;
-            div.innerHTML = `<span onclick="switchTab('${tab.id}')">${tab.name}</span><span class="tab-close" onclick="deleteTab('${tab.id}', event)">✕</span>`;
-            tabContainer.appendChild(div);
-        });
-        const add = document.createElement('div');
-        add.className = 'add-tab-btn'; add.innerText = '+'; add.onclick = addNewTab;
-        tabContainer.appendChild(add);
-        
-        renderContent();
-    }
-
-    function renderContent() {
-        const topics = noteData.content_map[currentTabId] || {};
-        const navDiv = document.getElementById('navList');
-        const contentDiv = document.getElementById('markdownOutput');
-        
-        let md = "", navHtml = "";
-        
-        if(Object.keys(topics).length === 0) {
-            contentDiv.innerHTML = '<div style="text-align:center;padding-top:50px;color:#ccc;">暂无内容</div>';
-            navDiv.innerHTML = '';
+    function renderDrafts() {
+        const div = document.getElementById('draftStream');
+        document.getElementById('draftCount').innerText = appData.drafts.length;
+        if(appData.drafts.length === 0) {
+            div.innerHTML = '<div style="text-align:center;color:#cbd5e1;padding:20px;">暂无草稿</div>';
             return;
         }
+        div.innerHTML = appData.drafts.map((d, i) => `
+            <div class="draft-bubble">
+                <div class="draft-meta"><span>${d.time}</span> <span style="cursor:pointer;color:#ef4444" onclick="delDraft(${i})">×</span></div>
+                <div class="draft-text">${escapeHtml(d.text)}</div>
+                <div style="margin-top:5px;text-align:right;">
+                    <span style="font-size:0.8rem;color:#cbd5e1;cursor:pointer;" onclick="promote(${i})">📝 速记上屏</span>
+                </div>
+            </div>
+        `).join('');
+    }
 
-        for(const [name, data] of Object.entries(topics)) {
-            navHtml += `<div class="nav-item" onclick="document.getElementById('t-${name}').scrollIntoView({behavior:'smooth'})">${name}</div>`;
-            md += `<h1 id="t-${name}">${name}</h1>\n\n`;
-            if(data.summary) md += `> ${data.summary}\n\n`;
-            if(data.sections) {
+    function delDraft(i) {
+        appData.drafts.splice(i, 1);
+        saveData();
+        renderDrafts();
+    }
+    
+    function promote(i) {
+        document.getElementById('mainInput').value = appData.drafts[i].text;
+        directSave();
+        delDraft(i);
+    }
+    
+    function clearAllDrafts() {
+        if(confirm("确定清空草稿？")) { appData.drafts = []; saveData(); renderDrafts(); }
+    }
+
+    // 速记逻辑
+    function directSave() {
+        const val = document.getElementById('mainInput').value.trim();
+        if(!val) return;
+        const topic = "📅 速记日志";
+        if (!appData.kb[topic]) appData.kb[topic] = { summary: "", sections: [{ title: "Log", items: [] }] };
+        appData.kb[topic].sections[0].items.push(val);
+        
+        saveData();
+        document.getElementById('mainInput').value = '';
+        renderKB();
+    }
+
+    // 知识库渲染 (支持搜索高亮)
+    function renderKB(search = '') {
+        const div = document.getElementById('kbContent');
+        if(Object.keys(appData.kb).length === 0) {
+            div.innerHTML = '<div style="text-align:center;color:#cbd5e1;margin-top:50px;">暂无归档内容</div>';
+            return;
+        }
+        let html = '';
+        for (const [topic, data] of Object.entries(appData.kb)) {
+            // 简单搜索过滤
+            if (search && !JSON.stringify(data).toLowerCase().includes(search.toLowerCase()) && !topic.toLowerCase().includes(search.toLowerCase())) continue;
+            
+            let secs = '';
+            if (data.sections) {
                 data.sections.forEach(s => {
-                    md += `### ${s.title}\n`;
-                    if(s.items) s.items.forEach(i => md += `- ${i}\n`);
-                    md += `\n`;
+                    const itemsHtml = s.items.map(i => {
+                        let text = marked.parseInline(i.replace(/CO2/g,'CO₂')); // 生物符号渲染
+                        if(search) text = text.replace(new RegExp(`(${search})`, 'gi'), '<span style="background:#fef08a">$1</span>');
+                        return `<li>${text}</li>`;
+                    }).join('');
+                    secs += `<div style="font-weight:bold;margin-top:10px;color:#475569">${s.title}</div><ul>${itemsHtml}</ul>`;
                 });
             }
-            md += `---\n\n`;
+            html += `
+                <div class="topic-card ${search ? '' : 'collapsed'}">
+                    <div class="topic-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        ${topic} <span style="font-size:0.8rem;color:#ccc">▼</span>
+                    </div>
+                    <div class="topic-body">${secs}</div>
+                </div>`;
         }
-        navDiv.innerHTML = navHtml;
-        contentDiv.innerHTML = marked.parse(md);
+        div.innerHTML = html || '<div style="text-align:center;color:#cbd5e1;">无匹配结果</div>';
     }
 
-    // === 6. 工具函数 ===
-    function switchTab(id) { currentTabId = id; renderUI(); }
-    function addNewTab() { const n = prompt("新分类名称:"); if(n) { noteData.tabs.push({id:'tab_'+Date.now(), name:n}); switchTab(noteData.tabs[noteData.tabs.length-1].id); saveData(); } }
-    function deleteTab(id, e) { e.stopPropagation(); if(noteData.tabs.length<=1)return alert("保留一个"); if(confirm("删除?")) { noteData.tabs=noteData.tabs.filter(t=>t.id!==id); delete noteData.content_map[id]; switchTab(noteData.tabs[0].id); saveData(); } }
-    function clearCurrentTab() { if(confirm("清空当前分类？")) { noteData.content_map[currentTabId]={}; renderUI(); saveData(); } }
-    function toggleConfig() { document.getElementById('configPanel').classList.toggle('show'); }
-    
-    function exportMarkdown() {
-        const topics = noteData.content_map[currentTabId] || {}; 
-        const name = noteData.tabs.find(t=>t.id===currentTabId).name;
-        let md = `# ${name}\n\n`; 
-        for(const [k,v] of Object.entries(topics)) { 
-            md+=`# ${k}\n\n> ${v.summary||''}\n\n`; 
-            if(v.sections) v.sections.forEach(s=>{ md+=`### ${s.title}\n`; if(s.items) s.items.forEach(i=>md+=`- ${i}\n`); }); 
-            md+=`---\n`; 
-        }
-        downloadFile(`${name}.md`, md, 'text/markdown');
-    }
-    
-    function exportJSON() {
-        downloadFile(`backup_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(noteData, null, 2), 'application/json');
-    }
+    // AI 整理
+    async function organizeAll() {
+        const key = localStorage.getItem('deepseek_key');
+        if (!key) { openApiSettings(); return; }
+        if (appData.drafts.length === 0) return alert("无草稿");
 
-    function downloadFile(filename, content, type) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([content], {type: type}));
-        a.download = filename;
-        a.click();
+        const btn = document.getElementById('organizeBtn');
+        btn.innerText = "⏳ 整理中..."; btn.disabled = true;
+
+        try {
+            const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+                body: JSON.stringify({
+                    model: "deepseek-chat",
+                    messages: [{ role: "user", content: `合并新草稿进知识库KB。KB:${JSON.stringify(appData.kb)} 草稿:${JSON.stringify(appData.drafts)}。只返回JSON。` }]
+                })
+            });
+            const data = await res.json();
+            const json = data.choices[0].message.content.replace(/```json|```/g, '').trim();
+            appData.kb = JSON.parse(json);
+            appData.drafts = [];
+            saveData();
+            renderAll();
+        } catch(e) { alert("整理失败: " + e.message); }
+        finally { btn.disabled = false; btn.innerText = "🧠 AI 一键整理"; }
     }
 
-    // 生物输入法 (CO2 -> CO₂)
-    document.getElementById('userInput').addEventListener('input', function(e) {
-        let val = this.value;
-        const cursor = this.selectionStart;
-        
-        // 符号替换
-        if(val.endsWith('->')) {
-            this.value = val.slice(0, -2) + '→';
-            this.selectionStart = this.selectionEnd = cursor - 1;
-        }
-
-        // CO2 替换
-        if(e.data === ' ' || val.slice(cursor-1, cursor) === ' ') {
-            const chunk = val.slice(Math.max(0, cursor-6), cursor);
-            const match = chunk.match(/([a-zA-Z]+)([0-9])\s$/);
-            if (match) {
-                const subMap = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
-                const newStr = match[1] + subMap[match[2]] + ' ';
-                this.value = val.slice(0, cursor - match[0].length) + newStr + val.slice(cursor);
-                this.selectionStart = this.selectionEnd = cursor - 1;
+    // 工具函数
+    function setupBioTyping() {
+        document.getElementById('mainInput').addEventListener('input', function(e) {
+            const cursor = this.selectionStart;
+            const val = this.value;
+            // CO2 -> CO₂
+            if (e.data === ' ' || val.slice(cursor-1, cursor) === ' ') {
+                const chunk = val.slice(Math.max(0, cursor-6), cursor);
+                const match = chunk.match(/([a-zA-Z]+)([0-9])\s$/);
+                if (match) {
+                    const subMap = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+                    const newStr = match[1] + subMap[match[2]] + ' ';
+                    this.value = val.slice(0, cursor - match[0].length) + newStr + val.slice(cursor);
+                    this.selectionStart = this.selectionEnd = cursor - 1;
+                }
             }
-        }
-    });
+        });
+    }
+    function openApiSettings() {
+        document.getElementById('apiModal').style.display = 'flex';
+        document.getElementById('apiKeyInput').value = localStorage.getItem('deepseek_key') || '';
+    }
+    function saveApiKey() {
+        const k = document.getElementById('apiKeyInput').value;
+        if(k) localStorage.setItem('deepseek_key', k);
+        document.getElementById('apiModal').style.display = 'none';
+    }
+    function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
 </script>
 </body>
