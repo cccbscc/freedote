@@ -368,161 +368,165 @@
     </div>
 
 <script>
-    // ==========================================
-    // 0️⃣ 配置区 (CONFIGURATION)
-    // ==========================================
-    // ⚠️ 请在此处填入你的 Supabase URL 和 Anon Key
-    const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; // 👈 填这里
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; // 👈 填这里
-
-    // 全局状态
-    let appData = {
-        drafts: [],     // 草稿数组
-        kb: {}          // 知识库 { "Topic": { summary, sections: [] } }
-    };
-    let currentUser = null;
-    let isOffline = false;
-    let supabase = null;
-    let saveTimer = null;
-
-    // ==========================================
-    // 1️⃣ 初始化与登录 (AUTH & INIT)
-    // ==========================================
-    window.onload = async function() {
-        setupBioTyping(); // 启动生物输入法监听
-
-        // 检查 Supabase 是否已填
-        if (SUPABASE_URL && SUPABASE_KEY) {
-            supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            
-            // 自动恢复会话
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                currentUser = session.user;
-                await enterCloudMode();
-                return; // 直接进入
-            }
-        } else {
-            console.warn("未配置 Supabase，仅限离线模式");
+    // === 0. 预设说明书 (新用户默认显示) ===
+    const DEFAULT_NOTE_DATA = {
+      "tabs": [
+        { "id": "tab_guide", "name": "📘 使用手册" },
+        { "id": "tab_demo", "name": "🧪 实验记录(示例)" }
+      ],
+      "content_map": {
+        "tab_guide": {
+          "快速入门": {
+            "summary": "欢迎使用 Freedote！这是一个懂你的 AI 知识库。",
+            "sections": [
+              { "title": "如何记录？", "items": ["直接在左侧输入内容。", "输入 @分类 可以自动归档。"] }
+            ]
+          }
         }
-        
-        // 没登录则显示遮罩
-        document.getElementById('loginOverlay').style.display = 'flex';
+      },
+      "settings": {}
     };
 
-    // === 🧠 智能验证逻辑 (移植自原版) ===
-    
-    async function handleSmartAuth() {
-        // 1. 基础检查
-        if (!sbClient) return alert("请先在代码中填入 Supabase URL 和 Key！");
+    // ============================================
+    // ⚠️ Supabase 配置 (已填好你的 Key)
+    // ============================================
+    const SUPABASE_URL = 'https://bqziigrbjnabrtmpixnn.supabase.co'; 
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxemlpZ3Jiam5hYnJ0bXBpeG5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU0OTU2NzcsImV4cCI6MjA4MTA3MTY3N30.h45zVtr58IhT5-CYbTWBUZ2Cs9W9vzbK31qnTftlPmw'; 
+    // ============================================
+
+    // === 1. 初始化核心变量 (修复冲突的关键点) ===
+    let sbClient = null; // 👈 变量名改了，不再和 window.supabase 冲突
+    let isLocalMode = false;
+    let currentUser = null;
+    let noteData = { tabs: [], content_map: {}, settings: {} }; 
+    let currentTabId = 'tab_guide';
+    let isEditMode = false;
+
+    // === 2. 页面加载与初始化 ===
+    window.onload = async function() {
+        // 手机端样式调整
+        if(window.innerWidth < 768) document.getElementById('inputPanel').classList.add('collapsed');
+
+        // 恢复 API Key
+        if(localStorage.getItem('apiKey')) document.getElementById('apiKey').value = localStorage.getItem('apiKey');
+
+        // 初始化 Supabase
+        try {
+            if(window.supabase && SUPABASE_URL.startsWith('http')) {
+                sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            }
+        } catch(e) { console.error("Supabase 初始化错误:", e); }
+
+        // 检查自动登录
+        if(sbClient) {
+            const { data: { session } } = await sbClient.auth.getSession();
+            if (session) {
+                switchLoginMode('cloud');
+                loginSuccess(session.user, true);
+                return;
+            }
+        }
+
+        // 检查离线模式
+        if(localStorage.getItem('is_local_mode') === 'true') {
+            switchLoginMode('local');
+            enterLocalMode();
+        }
+    }
+
+    // === 3. 模式切换 UI ===
+    function switchLoginMode(mode) {
+        document.getElementById('tabLocal').className = mode==='local' ? 'mode-btn active' : 'mode-btn';
+        document.getElementById('tabCloud').className = mode==='cloud' ? 'mode-btn active' : 'mode-btn';
+        document.getElementById('localForm').style.display = mode==='local' ? 'block' : 'none';
+        document.getElementById('cloudForm').style.display = mode==='cloud' ? 'block' : 'none';
+    }
+
+    function enterLocalMode() {
+        isLocalMode = true;
+        currentUser = { id: 'local_user', email: 'Local@User' };
+        localStorage.setItem('is_local_mode', 'true');
         
+        // 更新 UI
+        document.getElementById('userEmail').innerText = "🏠 本地模式";
+        document.getElementById('modeTag').innerText = "离线版";
+        if(document.getElementById('syncOption')) document.getElementById('syncOption').style.display = 'none';
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').classList.remove('blur');
+        
+        loadData(); // 调用后面的函数
+    }
+
+    // === 4. 智能登录/注册逻辑 (修复版) ===
+    async function handleLogin() {
+        if(!sbClient) return alert("Supabase 未初始化，请检查网络或配置");
+        
+        const btn = document.getElementById('loginBtn'); // 注意：如果不叫这个id，请改HTML
+        const msg = document.getElementById('loginMsg') || document.createElement('div');
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value.trim();
-        const btn = document.getElementById('loginBtn');
-        const msg = document.getElementById('loginMsg');
 
-        if (!email || !password) {
-            msg.innerText = "请输入邮箱和密码";
+        if(!email || !password) {
+            msg.innerText = "请输入账号和密码";
             return;
         }
 
         try {
-            // UI 锁定状态
-            btn.disabled = true;
-            btn.innerText = "正在连接...";
-            msg.innerText = "";
+            if(btn) btn.disabled = true; 
+            msg.innerText = "连接中...";
 
-            // 🟢 第一步：尝试直接登录
-            const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+            // 1. 尝试登录
+            let { data, error } = await sbClient.auth.signInWithPassword({ email, password });
 
             if (error) {
-                // 🟡 第二步：登录失败？判断是不是新用户
-                console.log("登录失败，尝试自动注册:", error.message);
+                // 2. 登录失败 -> 尝试注册
+                console.log("登录失败，尝试注册:", error.message);
+                msg.innerText = "账号不存在，正在自动注册...";
                 
-                // 只有当错误提示是“账号不存在”相关时，才尝试注册
-                // 但为了简单，我们直接尝试注册（Supabase 会处理重复注册报错）
-                btn.innerText = "账号不存在，正在注册...";
+                const regRes = await sbClient.auth.signUp({ email, password });
                 
-                const signUpRes = await sbClient.auth.signUp({ email, password });
-                
-                if (signUpRes.error) {
-                    // 注册也失败了（比如密码太短，或者邮箱格式不对）
-                    throw new Error(signUpRes.error.message);
+                if (regRes.error) {
+                    msg.innerText = "注册失败: " + regRes.error.message;
                 } else {
-                    // 🟢 第三步：注册成功！自动登录进去
-                    // 注意：有些 Supabase 设置需要邮箱验证，那样这里会进不去，
-                    // 但既然你之前的逻辑是这样，说明你可能关了"Confirm Email"设置。
-                    
-                    // 再次尝试登录以获取 Session
-                    const retry = await sbClient.auth.signInWithPassword({ email, password });
-                    if (retry.error) throw retry.error;
-                    
-                    // 成功！
-                    currentUser = retry.data.user;
-                    await enterCloudMode();
+                    // 3. 注册成功 -> 自动登录
+                    const loginRetry = await sbClient.auth.signInWithPassword({ email, password });
+                    if (!loginRetry.error) {
+                        loginSuccess(loginRetry.data.user, true);
+                    } else {
+                        msg.innerText = "注册成功但登录失败，请重试";
+                    }
                 }
             } else {
-                // 登录一次就成功了
-                currentUser = data.user;
-                await enterCloudMode();
+                // 登录成功
+                loginSuccess(data.user, true);
             }
-
-        } catch (e) {
-            // 🔴 统一错误处理
+        } catch(e) { 
+            msg.innerText = "错误: " + e.message; 
             console.error(e);
-            msg.innerText = "验证失败: " + e.message;
-            btn.innerText = "🚀 登录 / 自动注册"; // 恢复按钮文字
-        } finally {
-            btn.disabled = false;
+        } finally { 
+            if(btn) btn.disabled = false; 
         }
     }
 
-    // 离线模式
-    function startOfflineMode() {
-        isOffline = true;
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('mainApp').style.opacity = '1';
-        document.getElementById('userStatus').innerText = "离线模式";
+    // 登录成功后的处理
+    async function loginSuccess(user, isCloud) {
+        isLocalMode = false;
+        currentUser = user;
+        localStorage.removeItem('is_local_mode');
         
-        // 读取本地缓存
-        const local = localStorage.getItem('freedote_local_data');
-        if (local) appData = JSON.parse(local);
-        renderAll();
+        document.getElementById('userEmail').innerText = `☁️ ${user.email}`;
+        document.getElementById('modeTag').innerText = "云端版";
+        if(document.getElementById('syncOption')) document.getElementById('syncOption').style.display = 'block';
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').classList.remove('blur');
+        
+        await loadData();
     }
 
-    // 云端模式入口
-    async function enterCloudMode() {
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('mainApp').style.opacity = '1';
-        document.getElementById('userStatus').innerText = currentUser.email;
-        updateSyncStatus('syncing');
-
-        // 拉取云端数据
-        try {
-            // 假设表名 'notes'，字段 'content' (jsonb)
-            const { data, error } = await supabase
-                .from('notes')
-                .select('content')
-                .eq('user_id', currentUser.id)
-                .single();
-
-            if (data && data.content) {
-                appData = data.content;
-                // 数据结构补全 (防止旧数据报错)
-                if (!appData.drafts) appData.drafts = [];
-                if (!appData.kb) appData.kb = {};
-            }
-        } catch (e) {
-            console.error("拉取数据错误:", e);
-        }
-        
-        renderAll();
-        updateSyncStatus('online');
-    }
-
-    // 退出登录
     async function handleLogout() {
-        if (supabase) await supabase.auth.signOut();
+        if(!confirm("确定退出？")) return;
+        localStorage.removeItem('is_local_mode');
+        if(!isLocalMode && sbClient) await sbClient.auth.signOut();
         location.reload();
     }
 
